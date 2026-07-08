@@ -1,0 +1,120 @@
+@import url("https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300..700;1,9..40,400&family=JetBrains+Mono:wght@400;500&display=swap");
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  /* PRIMARY — Sky Blue scale */
+  --jmh-blue:        oklch(0.54 0.14 240);
+  --jmh-blue-80:     oklch(0.63 0.11 240);
+  --jmh-blue-60:     oklch(0.72 0.08 240);
+  --jmh-blue-30:     oklch(0.84 0.05 240);
+  --jmh-blue-10:     oklch(0.93 0.025 240);
+  --jmh-blue-05:     oklch(0.97 0.012 240);
+
+  /* SECONDARY — Periwinkle */
+  --jmh-periwinkle:    oklch(0.68 0.10 255);
+  --jmh-periwinkle-bg: oklch(0.97 0.015 255);
+
+  /* SEMANTIC */
+  --jmh-sage:        oklch(0.60 0.09 148);
+  --jmh-sage-bg:     oklch(0.96 0.020 148);
+  --jmh-coral:       oklch(0.60 0.15 22);
+  --jmh-coral-bg:    oklch(0.97 0.022 22);
+  --jmh-gold:        oklch(0.72 0.10 88);
+  --jmh-gold-bg:     oklch(0.97 0.020 88);
+
+  /* NEUTRALS */
+  --bg:              oklch(0.980 0.007 240);
+  --surface:         oklch(1.000 0.000 0);
+  --border:          oklch(0.910 0.012 240);
+  --border-strong:   oklch(0.820 0.020 240);
+
+  /* TEXT */
+  --text-primary:    oklch(0.20 0.035 245);
+  --text-secondary:  oklch(0.46 0.025 245);
+  --text-muted:      oklch(0.64 0.018 245);
+  --text-on-blue:    oklch(0.98 0.004 240);
+
+  /* FONT */
+  --font:            'DM Sans', system-ui, -apple-system, sans-serif;
+  --font-mono:       'JetBrains Mono', ui-monospace, 'Courier New', monospace;
+
+  /* TYPE SCALE */
+  --text-xs:   11px;
+  --text-sm:   13px;
+  --text-base: 15px;
+  --text-md:   17px;
+  --text-lg:   20px;
+  --text-xl:   24px;
+  --text-2xl:  32px;
+  --text-3xl:  44px;
+  --text-4xl:  58px;
+
+  /* SPACING — 4px base */
+  --sp-1: 4px;   --sp-2: 8px;   --sp-3: 12px;
+  --sp-4: 16px;  --sp-5: 20px;  --sp-6: 24px;
+  --sp-8: 32px;  --sp-10: 40px; --sp-12: 48px; --sp-16: 64px;
+
+  /* RADIUS */
+  --r-sm:   6px;
+  --r-md:   10px;
+  --r-lg:   16px;
+  --r-xl:   24px;
+  --r-full: 999px;
+
+  /* SHADOWS — tinted with primary blue */
+  --shadow-sm: 0 1px 3px oklch(0.54 0.14 240 / 0.07), 0 1px 2px oklch(0.54 0.14 240 / 0.04);
+  --shadow-md: 0 4px 12px oklch(0.54 0.14 240 / 0.09), 0 2px 4px oklch(0.54 0.14 240 / 0.05);
+  --shadow-lg: 0 12px 32px oklch(0.54 0.14 240 / 0.10), 0 4px 8px oklch(0.54 0.14 240 / 0.06);
+  --shadow-xl: 0 24px 64px oklch(0.54 0.14 240 / 0.12), 0 8px 16px oklch(0.54 0.14 240 / 0.07);
+
+  /* MOTION */
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in:  cubic-bezier(0.7, 0, 0.84, 0);
+  --dur-fast: 120ms;
+  --dur-base: 220ms;
+  --dur-slow: 400ms;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  background-color: var(--bg);
+  color: var(--text-primary);
+  font-family: var(--font);
+  -webkit-font-smoothing: antialiased;
+}
+
+body {
+  background-color: var(--bg);
+  min-height: 100dvh;
+}
+
+/* Status strip utility used on task rows */
+.task-strip {
+  position: relative;
+  overflow: hidden;
+}
+.task-strip::before {
+  content: '';
+  position: absolute;
+  inset-inline-start: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: var(--strip-color, var(--border-strong));
+  border-start-start-radius: var(--r-md);
+  border-end-start-radius: var(--r-md);
+}
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(0.7); }
+}
+.pulse-dot {
+  animation: pulse-dot 1.6s ease-in-out infinite;
+}
