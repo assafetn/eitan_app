@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { ALLOWED_EMAILS } from "@/lib/constants";
 import BottomNav from "@/components/ui/BottomNav";
+import RefreshOnFocus from "@/components/RefreshOnFocus";
 
 export default async function AppLayout({
   children,
@@ -31,6 +32,7 @@ export default async function AppLayout({
         paddingBottom: 96, // space for bottom nav
       }}
     >
+      <RefreshOnFocus />
       <div style={{ flex: 1 }}>{children}</div>
       <BottomNav />
     </div>

@@ -4,7 +4,10 @@ import { useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import type { ShoppingItem } from "@/lib/types";
 import { getShoppingEmoji } from "@/lib/shoppingEmoji";
+import Toast from "@/components/ui/Toast";
 import { Check, Plus, Trash2 } from "lucide-react";
+
+const SAVE_FAILED = "השמירה נכשלה, נסו שוב";
 
 interface Props {
   initialItems: ShoppingItem[];
@@ -46,6 +49,8 @@ export default function ShoppingClient({ initialItems }: Props) {
   const [name, setName] = useState("");
   const [quantity, setQuantity] = useState("");
   const [adding, setAdding] = useState(false);
+  // Transient failure toast for reverted optimistic updates.
+  const [toast, setToast] = useState<string | null>(null);
 
   const sorted = useMemo(() => sortItems(items), [items]);
   const checkedCount = items.filter((i) => i.is_checked).length;
@@ -93,21 +98,37 @@ export default function ShoppingClient({ initialItems }: Props) {
     const next = !item.is_checked;
     setItems((prev) => prev.map((i) => (i.id === item.id ? { ...i, is_checked: next } : i)));
     const supabase = createClient();
-    await supabase.from("shopping_items").update({ is_checked: next }).eq("id", item.id);
+    const { error } = await supabase.from("shopping_items").update({ is_checked: next }).eq("id", item.id);
+    if (error) {
+      // revert optimistic toggle
+      setItems((prev) => prev.map((i) => (i.id === item.id ? { ...i, is_checked: item.is_checked } : i)));
+      setToast(SAVE_FAILED);
+    }
   }
 
   async function deleteItem(item: ShoppingItem) {
     setItems((prev) => prev.filter((i) => i.id !== item.id));
     const supabase = createClient();
-    await supabase.from("shopping_items").delete().eq("id", item.id);
+    const { error } = await supabase.from("shopping_items").delete().eq("id", item.id);
+    if (error) {
+      // revert optimistic delete (sortItems re-orders on render, so order here doesn't matter)
+      setItems((prev) => [...prev, item]);
+      setToast(SAVE_FAILED);
+    }
   }
 
   async function clearChecked() {
-    const ids = items.filter((i) => i.is_checked).map((i) => i.id);
-    if (ids.length === 0) return;
+    const removed = items.filter((i) => i.is_checked);
+    if (removed.length === 0) return;
+    const ids = removed.map((i) => i.id);
     setItems((prev) => prev.filter((i) => !i.is_checked));
     const supabase = createClient();
-    await supabase.from("shopping_items").delete().in("id", ids);
+    const { error } = await supabase.from("shopping_items").delete().in("id", ids);
+    if (error) {
+      // revert optimistic clear
+      setItems((prev) => [...prev, ...removed]);
+      setToast(SAVE_FAILED);
+    }
   }
 
   return (
@@ -261,6 +282,8 @@ export default function ShoppingClient({ initialItems }: Props) {
           ))}
         </div>
       )}
+
+      <Toast message={toast} onDismiss={() => setToast(null)} />
     </div>
   );
 }

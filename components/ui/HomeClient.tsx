@@ -5,9 +5,12 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import type { OccurrenceOverride, Task, TaskStatus } from "@/lib/types";
-import { addDaysISO, resolveOccurrencesInRange, todayISO, type ResolvedOccurrence } from "@/lib/recurrence";
+import { addDaysISO, formatDueDate, resolveOccurrencesInRange, todayISO, type ResolvedOccurrence } from "@/lib/recurrence";
 import TaskRow from "@/components/ui/TaskRow";
+import Toast from "@/components/ui/Toast";
 import { CircleCheck, Settings } from "lucide-react";
+
+const SAVE_FAILED = "השמירה נכשלה, נסו שוב";
 
 interface Props {
   appName: string;
@@ -30,16 +33,41 @@ function byDate(a: ResolvedOccurrence, b: ResolvedOccurrence): number {
   return (a.date ?? "") < (b.date ?? "") ? -1 : (a.date ?? "") > (b.date ?? "") ? 1 : 0;
 }
 
+// Hebrew count phrase for tasks: 1 → "משימה אחת", otherwise "N משימות".
+function tasksCountPhrase(n: number): string {
+  return n === 1 ? "משימה אחת" : `${n} משימות`;
+}
+
+// Templated (no AI) whole-household summary line. Zero → a calm empty state;
+// otherwise a pluralized count with an optional overdue clause, e.g.
+// "יש 3 משימות להיום, אחת מהן באיחור".
+function summarySentence(todayCount: number, overdueCount: number): string {
+  if (todayCount === 0) return "אין משימות פתוחות להיום";
+  let s = `יש ${tasksCountPhrase(todayCount)} להיום`;
+  if (overdueCount > 0) {
+    s += `, ${overdueCount === 1 ? "אחת מהן" : `${overdueCount} מהן`} באיחור`;
+  }
+  return s;
+}
+
 export default function HomeClient({ appName, firstName, initialTasks, initialOverrides }: Props) {
   const router = useRouter();
   const [tasks, setTasks] = useState<Task[]>(initialTasks);
   const [overrides, setOverrides] = useState<OccurrenceOverride[]>(initialOverrides);
+  // Transient failure toast for reverted optimistic updates.
+  const [toast, setToast] = useState<string | null>(null);
 
   const today = todayISO();
 
   // What to show: today's open tasks (incl. overdue, same as the list's "היום"),
   // and if there are none, the tasks on the nearest upcoming day instead.
-  const { mode, list } = useMemo<{ mode: "today" | "upcoming" | "empty"; list: ResolvedOccurrence[] }>(() => {
+  const { mode, list, todayCount, overdueCount, next3 } = useMemo<{
+    mode: "today" | "upcoming" | "empty";
+    list: ResolvedOccurrence[];
+    todayCount: number;
+    overdueCount: number;
+    next3: ResolvedOccurrence[];
+  }>(() => {
     // Open occurrences dated today (recurring today + singles due today).
     const todayResolved = resolveOccurrencesInRange(tasks, overrides, today, today).filter(
       (o) => o.status === "open"
@@ -64,7 +92,22 @@ export default function HomeClient({ appName, firstName, initialTasks, initialOv
       }));
 
     const todayList = [...overdue, ...todayResolved].sort(byDate);
-    if (todayList.length > 0) return { mode: "today", list: todayList };
+
+    // Household summary counts (home fetches all tasks unfiltered → both adults
+    // combined). "Today" mirrors the list: today's open + overdue open tasks.
+    const overdueCount = overdue.length;
+    const todayCount = todayList.length;
+
+    // Next 3 upcoming open tasks, today onward, soonest first — same resolver and
+    // status conditions used elsewhere (no new date logic).
+    const next3 = resolveOccurrencesInRange(tasks, overrides, today, addDaysISO(today, UPCOMING_HORIZON_DAYS))
+      .filter((o) => o.status === "open" && o.date)
+      .sort(byDate)
+      .slice(0, 3);
+
+    if (todayList.length > 0) {
+      return { mode: "today", list: todayList, todayCount, overdueCount, next3 };
+    }
 
     // Fallback: the soonest upcoming day that has open tasks.
     const upcoming = resolveOccurrencesInRange(
@@ -76,9 +119,17 @@ export default function HomeClient({ appName, firstName, initialTasks, initialOv
       .filter((o) => o.status === "open" && o.date)
       .sort(byDate);
 
-    if (upcoming.length === 0) return { mode: "empty", list: [] };
+    if (upcoming.length === 0) {
+      return { mode: "empty", list: [], todayCount, overdueCount, next3 };
+    }
     const soonest = upcoming[0].date;
-    return { mode: "upcoming", list: upcoming.filter((o) => o.date === soonest) };
+    return {
+      mode: "upcoming",
+      list: upcoming.filter((o) => o.date === soonest),
+      todayCount,
+      overdueCount,
+      next3,
+    };
   }, [tasks, overrides, today]);
 
   // Greeting + date use the browser's local time; suppress hydration mismatch
@@ -146,6 +197,7 @@ export default function HomeClient({ appName, firstName, initialTasks, initialOv
         .single();
       if (error || !data) {
         setOverrides((prev) => prev.filter((o) => o.id !== tempId));
+        setToast(SAVE_FAILED);
       } else {
         setOverrides((prev) => prev.map((o) => (o.id === tempId ? (data as OccurrenceOverride) : o)));
       }
@@ -242,6 +294,102 @@ export default function HomeClient({ appName, firstName, initialTasks, initialOv
         </Link>
       </div>
 
+      {/* Household summary — templated (no AI), both adults combined. Derived
+          entirely from the tasks/overrides already passed to this page. */}
+      <div
+        style={{
+          background: "var(--surface)",
+          border: "1px solid var(--border)",
+          borderRadius: "var(--r-lg)",
+          boxShadow: "var(--shadow-sm)",
+          padding: "var(--sp-5)",
+          marginBottom: "var(--sp-6)",
+        }}
+      >
+        <p
+          suppressHydrationWarning
+          style={{
+            fontFamily: "var(--font)",
+            fontSize: "var(--text-md)",
+            fontWeight: 600,
+            color: "var(--text-primary)",
+            lineHeight: 1.4,
+            margin: 0,
+          }}
+        >
+          {summarySentence(todayCount, overdueCount)}
+        </p>
+
+        {/* Next 3 upcoming open tasks (today onward, soonest first) */}
+        <div style={{ marginTop: "var(--sp-4)" }}>
+          <p
+            style={{
+              fontFamily: "var(--font)",
+              fontSize: "var(--text-xs)",
+              fontWeight: 500,
+              letterSpacing: "0.10em",
+              textTransform: "uppercase",
+              color: "var(--text-muted)",
+              margin: "0 0 var(--sp-1)",
+            }}
+          >
+            בקרוב
+          </p>
+          {next3.length === 0 ? (
+            <p
+              style={{
+                fontFamily: "var(--font)",
+                fontSize: "var(--text-sm)",
+                color: "var(--text-muted)",
+                margin: 0,
+              }}
+            >
+              אין משימות קרובות
+            </p>
+          ) : (
+            <div>
+              {next3.map((occ, i) => (
+                <div
+                  key={occ.key}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    gap: "var(--sp-3)",
+                    paddingBlock: "var(--sp-2)",
+                    borderTop: i > 0 ? "1px solid var(--border)" : "none",
+                  }}
+                >
+                  <span
+                    style={{
+                      fontFamily: "var(--font)",
+                      fontSize: "var(--text-sm)",
+                      color: "var(--text-primary)",
+                      whiteSpace: "nowrap",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      minWidth: 0,
+                    }}
+                  >
+                    {occ.task.title}
+                  </span>
+                  <span
+                    style={{
+                      fontFamily: "var(--font)",
+                      fontSize: "var(--text-xs)",
+                      color: "var(--text-muted)",
+                      flexShrink: 0,
+                    }}
+                  >
+                    {formatDueDate(occ.date as string, occ.task.due_time)}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
       {/* Tasks — today, or the next upcoming day if today is clear */}
       {mode === "empty" ? (
         <div style={{ textAlign: "center", padding: "var(--sp-12) var(--sp-6)", color: "var(--text-muted)" }}>
@@ -287,6 +435,8 @@ export default function HomeClient({ appName, firstName, initialTasks, initialOv
           </div>
         </>
       )}
+
+      <Toast message={toast} onDismiss={() => setToast(null)} />
     </div>
   );
 }

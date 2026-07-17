@@ -118,3 +118,12 @@ body {
 .pulse-dot {
   animation: pulse-dot 1.6s ease-in-out infinite;
 }
+
+/* Route-loading skeleton placeholder (opacity pulse only — no new colors). */
+@keyframes skeleton-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}
+.skeleton {
+  animation: skeleton-pulse 1.4s var(--ease-out) infinite;
+}

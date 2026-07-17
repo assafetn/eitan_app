@@ -1,7 +1,7 @@
 "use client";
 
 import type { Label, Responsibility, Task, TaskStatus } from "@/lib/types";
-import { recurrenceLabel, todayISO } from "@/lib/recurrence";
+import { formatDueDate, recurrenceLabel, todayISO } from "@/lib/recurrence";
 import { Calendar, Check, Repeat, Trash2, User } from "lucide-react";
 
 // At 390px we show at most this many label chips, then a "+N" overflow chip,
@@ -21,16 +21,6 @@ interface Props {
   onDelete?: () => void;
   /** Tapping the row body (not the toggle/delete targets) opens edit. */
   onEdit?: () => void;
-}
-
-// Israeli DD/MM, dropping the year when it's the current year; a due_time
-// (HH:MM, 24h) is appended when present.
-function formatDueDate(iso: string, time: string | null): string {
-  const [y, m, d] = iso.split("-");
-  let out = `${d}/${m}`;
-  if (y !== String(new Date().getFullYear())) out += `/${y}`;
-  if (time) out += ` ${time.slice(0, 5)}`;
-  return out;
 }
 
 export default function TaskRow({ task, date, status, isRecurring, onToggle, onDelete, onEdit }: Props) {
@@ -53,6 +43,13 @@ export default function TaskRow({ task, date, status, isRecurring, onToggle, onD
   // Nothing shown when the task has no responsibility.
   const ownerName = responsibility?.owner?.name ?? null;
   const child = task.child ?? null;
+
+  // Assignee ("מבצע") — the adult the task is assigned to, resolved from the same
+  // joined member as owner/child. Only worth surfacing when it adds information:
+  // it exists AND isn't the same person as the responsibility owner (otherwise
+  // it's redundant noise next to the owner label).
+  const assignee = task.assignee ?? null;
+  const showAssignee = !!assignee && task.assignee_id !== (responsibility?.owner_id ?? null);
 
   return (
     <div
@@ -81,27 +78,41 @@ export default function TaskRow({ task, date, status, isRecurring, onToggle, onD
         e.currentTarget.style.transform = "translateY(0)";
       }}
     >
-      {/* Toggle circle */}
+      {/* Toggle circle. The visible circle stays 20px, but the button pads out to
+          a 44×44 touch target and pulls back with a matching negative margin, so
+          the row layout and its neighbours don't shift at 390px RTL. */}
       <button
         onClick={(e) => { e.stopPropagation(); onToggle(); }}
         aria-label={isDone ? "סמן כפתוח" : "סמן כהושלם"}
         style={{
-          width: 20,
-          height: 20,
-          borderRadius: "50%",
-          border: `2px solid ${isDone ? "var(--jmh-sage)" : isUrgent ? "var(--jmh-coral)" : "var(--border-strong)"}`,
-          background: isDone ? "var(--jmh-sage)" : "transparent",
+          padding: 12, // 12 + 20 circle + 12 = 44px hit area (box-sizing: border-box)
+          margin: -12, // neutralises the padding so the footprint stays 20px
+          background: "transparent",
+          border: "none",
           flexShrink: 0,
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
           cursor: "pointer",
-          color: "white",
-          padding: 0,
-          transition: `background var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out)`,
         }}
       >
-        {isDone && <Check size={10} strokeWidth={2.5} />}
+        <span
+          aria-hidden="true"
+          style={{
+            width: 20,
+            height: 20,
+            borderRadius: "50%",
+            border: `2px solid ${isDone ? "var(--jmh-sage)" : isUrgent ? "var(--jmh-coral)" : "var(--border-strong)"}`,
+            background: isDone ? "var(--jmh-sage)" : "transparent",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            color: "white",
+            transition: `background var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out)`,
+          }}
+        >
+          {isDone && <Check size={10} strokeWidth={2.5} />}
+        </span>
       </button>
 
       {/* Content */}
@@ -133,8 +144,8 @@ export default function TaskRow({ task, date, status, isRecurring, onToggle, onD
         </div>
 
         {(() => {
-          // Build the metadata row (date · recurrence · owner · child) as an
-          // ordered list so dot separators only appear between present items.
+          // Build the metadata row (date · recurrence · owner · assignee · child)
+          // as an ordered list so dot separators only appear between present items.
           const dateNode = date ? (
             <span
               style={{
@@ -175,6 +186,25 @@ export default function TaskRow({ task, date, status, isRecurring, onToggle, onD
             </span>
           ) : null;
 
+          // Distinguished from the owner (which leads with a User icon) by a short
+          // muted "מבצע" prefix label — same muted-metadata token, no icon, so the
+          // two people never read as the same field.
+          const assigneeNode = showAssignee ? (
+            <span
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 4,
+                fontFamily: "var(--font)",
+                fontSize: 11,
+                color: "var(--text-muted)",
+              }}
+            >
+              <span style={{ fontWeight: 500 }}>מבצע</span>
+              {assignee!.name}
+            </span>
+          ) : null;
+
           const childNode = child ? (
             <span
               style={{
@@ -199,7 +229,7 @@ export default function TaskRow({ task, date, status, isRecurring, onToggle, onD
             </span>
           ) : null;
 
-          const items = [dateNode, recurrenceNode, ownerNode, childNode].filter(Boolean);
+          const items = [dateNode, recurrenceNode, ownerNode, assigneeNode, childNode].filter(Boolean);
           if (items.length === 0) return null;
 
           return (

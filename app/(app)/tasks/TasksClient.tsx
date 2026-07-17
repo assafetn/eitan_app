@@ -15,7 +15,10 @@ import { addDaysISO, expandOccurrences, isCompletedOccurrenceVisible, todayISO }
 import TaskRow from "@/components/ui/TaskRow";
 import AddTaskModal from "@/components/ui/AddTaskModal";
 import CalendarView from "@/components/ui/CalendarView";
+import Toast from "@/components/ui/Toast";
 import { CalendarDays, List, Plus } from "lucide-react";
+
+const SAVE_FAILED = "השמירה נכשלה, נסו שוב";
 
 interface Props {
   initialTasks: Task[];
@@ -36,6 +39,8 @@ interface Props {
   showFilter?: boolean;
   /** Whether to show the רשימה/לוח שנה view toggle. /tasks only; off elsewhere. */
   showViewToggle?: boolean;
+  /** The logged-in adult's member id, for the "שלי" owner quick-filter. */
+  currentMemberId?: string | null;
 }
 
 // אחריות filter selection: a responsibility id, "all", or "none" (unassigned).
@@ -69,6 +74,7 @@ export default function TasksClient({
   openOnly = false,
   showFilter = false,
   showViewToggle = false,
+  currentMemberId = null,
 }: Props) {
   const [tasks, setTasks] = useState<Task[]>(initialTasks);
   const [overrides, setOverrides] = useState<OccurrenceOverride[]>(initialOverrides);
@@ -80,6 +86,8 @@ export default function TasksClient({
   // When set, the add-task sheet opens in edit mode for this task (the series
   // parent, for a recurring occurrence).
   const [editingTask, setEditingTask] = useState<Task | null>(null);
+  // Transient failure toast for reverted optimistic updates.
+  const [toast, setToast] = useState<string | null>(null);
 
   // Filter state — local UI only, resets on reload (7.3). The two cuts combine.
   const [respFilter, setRespFilter] = useState<RespFilter>("all");
@@ -136,6 +144,42 @@ export default function TasksClient({
     return out;
   }, [tasks, overrides, openOnly]);
 
+  // Open-task counts per filter label, derived from the SAME occurrence list the
+  // view builds (no new query, no re-implemented status logic). A recurring
+  // series counts once — distinct task id — not once per expanded occurrence, so
+  // the badge reads as "open tasks", not a huge occurrence tally. Counts are
+  // per-label totals, independent of the currently active אחריות/owner cut
+  // (simpler + predictable; the two cuts otherwise combine).
+  const filterCounts = useMemo(() => {
+    const respSets = new Map<string, Set<string>>();
+    const ownerSets = new Map<string, Set<string>>();
+    const allSet = new Set<string>();
+    const noneSet = new Set<string>();
+    for (const occ of occurrences) {
+      if (occ.status !== "open") continue; // open only — exclude done/completed
+      const t = occ.task;
+      allSet.add(t.id);
+      if (t.responsibility_id) {
+        let rs = respSets.get(t.responsibility_id);
+        if (!rs) respSets.set(t.responsibility_id, (rs = new Set()));
+        rs.add(t.id);
+        const ownerId = t.responsibility?.owner_id;
+        if (ownerId) {
+          let os = ownerSets.get(ownerId);
+          if (!os) ownerSets.set(ownerId, (os = new Set()));
+          os.add(t.id);
+        }
+      } else {
+        noneSet.add(t.id);
+      }
+    }
+    const resp: Record<string, number> = {};
+    respSets.forEach((s, id) => (resp[id] = s.size));
+    const owner: Record<string, number> = {};
+    ownerSets.forEach((s, id) => (owner[id] = s.size));
+    return { all: allSet.size, none: noneSet.size, resp, owner };
+  }, [occurrences]);
+
   // ONE filter predicate, shared by BOTH views. Recurring occurrences carry
   // their series parent in `occ.task`, so filtering by responsibility/owner
   // includes/excludes them by the PARENT (same rule as 7.3). useCallback keeps
@@ -164,7 +208,7 @@ export default function TasksClient({
     [occurrences, filterActive, matchesFilter]
   );
 
-  const { today, upcoming, noDate } = useMemo(
+  const { overdue, today, upcoming, noDate } = useMemo(
     () => groupOccurrences(filteredOccurrences),
     [filteredOccurrences]
   );
@@ -232,6 +276,7 @@ export default function TasksClient({
       if (error || !data) {
         // revert optimistic insert
         setOverrides((prev) => prev.filter((o) => o.id !== tempId));
+        setToast(SAVE_FAILED);
       } else {
         setOverrides((prev) =>
           prev.map((o) => (o.id === tempId ? (data as OccurrenceOverride) : o))
@@ -510,6 +555,8 @@ export default function TasksClient({
           ownerFilter={ownerFilter}
           onRespChange={setRespFilter}
           onOwnerChange={setOwnerFilter}
+          currentMemberId={currentMemberId}
+          counts={filterCounts}
         />
       )}
 
@@ -552,6 +599,9 @@ export default function TasksClient({
             </div>
           )}
 
+          {overdue.length > 0 && (
+            <Section title="באיחור" accent>{overdue.map(renderRow)}</Section>
+          )}
           {today.length > 0 && (
             <Section title="היום">{today.map(renderRow)}</Section>
           )}
@@ -582,27 +632,35 @@ export default function TasksClient({
           onCreateLabel={createLabel}
         />
       )}
+
+      <Toast message={toast} onDismiss={() => setToast(null)} />
     </div>
   );
 }
 
 function groupOccurrences(occs: Occurrence[]) {
   const t = todayISO();
+  const overdue: Occurrence[] = [];
   const today: Occurrence[] = [];
   const upcoming: Occurrence[] = [];
   const noDate: Occurrence[] = [];
 
   for (const o of occs) {
     if (!o.date) noDate.push(o);
-    else if (o.date <= t) today.push(o); // today or overdue
+    // Overdue = an open task dated before today — the same condition the coral
+    // strip uses. Done past-due tasks are NOT overdue and stay in their date
+    // group exactly as before.
+    else if (o.date < t && o.status === "open") overdue.push(o);
+    else if (o.date <= t) today.push(o); // today (or a still-visible past done task)
     else upcoming.push(o);
   }
 
   const byDate = (a: Occurrence, b: Occurrence) => (a.date! < b.date! ? -1 : a.date! > b.date! ? 1 : 0);
+  overdue.sort(byDate); // most overdue (earliest) first
   today.sort(byDate);
   upcoming.sort(byDate);
 
-  return { today, upcoming, noDate };
+  return { overdue, today, upcoming, noDate };
 }
 
 // Segmented control to switch the משימות tab between the list and the month
@@ -688,6 +746,8 @@ function FilterBar({
   ownerFilter,
   onRespChange,
   onOwnerChange,
+  currentMemberId,
+  counts,
 }: {
   responsibilities: Responsibility[];
   adults: FamilyMember[];
@@ -695,22 +755,26 @@ function FilterBar({
   ownerFilter: OwnerFilter;
   onRespChange: (f: RespFilter) => void;
   onOwnerChange: (f: OwnerFilter) => void;
+  currentMemberId: string | null;
+  /** Open-task counts per filter label (per-label totals, filter-independent). */
+  counts: { all: number; none: number; resp: Record<string, number>; owner: Record<string, number> };
 }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "var(--sp-3)", marginBottom: "var(--sp-6)" }}>
       {/* אחריות chips */}
       <div style={{ display: "flex", gap: "var(--sp-2)", flexWrap: "wrap" }}>
-        <FilterChip label="הכל" active={respFilter === "all"} onClick={() => onRespChange("all")} />
+        <FilterChip label="הכל" count={counts.all} active={respFilter === "all"} onClick={() => onRespChange("all")} />
         {responsibilities.map((r) => (
           <FilterChip
             key={r.id}
             label={r.name}
             color={r.color}
+            count={counts.resp[r.id] ?? 0}
             active={respFilter === r.id}
             onClick={() => onRespChange(r.id)}
           />
         ))}
-        <FilterChip label="ללא אחריות" active={respFilter === "none"} onClick={() => onRespChange("none")} />
+        <FilterChip label="ללא אחריות" count={counts.none} active={respFilter === "none"} onClick={() => onRespChange("none")} />
       </div>
 
       {/* owner segmented control (secondary) */}
@@ -738,30 +802,66 @@ function FilterBar({
               borderRadius: "var(--r-full)",
             }}
           >
-            <SegItem label="הכל" active={ownerFilter === "all"} onClick={() => onOwnerChange("all")} />
+            <SegItem label="הכל" count={counts.all} active={ownerFilter === "all"} onClick={() => onOwnerChange("all")} />
             {adults.map((a) => (
               <SegItem
                 key={a.id}
                 label={a.name}
+                count={counts.owner[a.id] ?? 0}
                 active={ownerFilter === a.id}
                 onClick={() => onOwnerChange(a.id)}
               />
             ))}
           </div>
+
+          {/* "שלי" quick-filter — presets the owner cut to the logged-in adult.
+              A shortcut only: it toggles the SAME ownerFilter state the control
+              above drives, so list + calendar stay in sync via matchesFilter. */}
+          {currentMemberId && (
+            <FilterChip
+              label="שלי"
+              count={counts.owner[currentMemberId] ?? 0}
+              active={ownerFilter === currentMemberId}
+              onClick={() =>
+                onOwnerChange(ownerFilter === currentMemberId ? "all" : currentMemberId)
+              }
+            />
+          )}
         </div>
       )}
     </div>
   );
 }
 
+// Subtle open-task count shown beside a filter label. Kept at muted-metadata
+// weight/color (never the loud active blue) so it reads as a quiet count, not a
+// notification badge. Tabular figures keep single/double digits from jittering.
+function CountBadge({ count }: { count: number }) {
+  return (
+    <span
+      style={{
+        fontFamily: "var(--font)",
+        fontSize: "var(--text-xs)",
+        fontWeight: 500,
+        color: "var(--text-muted)",
+        fontVariantNumeric: "tabular-nums",
+      }}
+    >
+      {count}
+    </span>
+  );
+}
+
 function FilterChip({
   label,
   color,
+  count,
   active,
   onClick,
 }: {
   label: string;
   color?: string | null;
+  count?: number;
   active: boolean;
   onClick: () => void;
 }) {
@@ -789,16 +889,30 @@ function FilterChip({
         <span style={{ width: 7, height: 7, borderRadius: "50%", background: `var(--${color})`, flexShrink: 0 }} />
       )}
       {label}
+      {typeof count === "number" && <CountBadge count={count} />}
     </button>
   );
 }
 
-function SegItem({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
+function SegItem({
+  label,
+  count,
+  active,
+  onClick,
+}: {
+  label: string;
+  count?: number;
+  active: boolean;
+  onClick: () => void;
+}) {
   return (
     <button
       type="button"
       onClick={onClick}
       style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: "var(--sp-1)",
         padding: "5px 12px",
         borderRadius: "var(--r-full)",
         border: "none",
@@ -813,21 +927,31 @@ function SegItem({ label, active, onClick }: { label: string; active: boolean; o
       }}
     >
       {label}
+      {typeof count === "number" && <CountBadge count={count} />}
     </button>
   );
 }
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function Section({
+  title,
+  children,
+  accent = false,
+}: {
+  title: string;
+  children: React.ReactNode;
+  /** Coral header for the overdue group (reuses the existing overdue token). */
+  accent?: boolean;
+}) {
   return (
     <div style={{ marginBottom: "var(--sp-6)" }}>
       <p
         style={{
           fontFamily: "var(--font)",
           fontSize: "var(--text-xs)",
-          fontWeight: 500,
+          fontWeight: accent ? 600 : 500,
           letterSpacing: "0.10em",
           textTransform: "uppercase",
-          color: "var(--text-muted)",
+          color: accent ? "var(--jmh-coral)" : "var(--text-muted)",
           margin: "0 0 var(--sp-2)",
         }}
       >

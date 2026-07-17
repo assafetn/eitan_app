@@ -182,6 +182,19 @@ export function resolveOccurrencesInRange(
   return out;
 }
 
+/**
+ * Israeli DD/MM for a YYYY-MM-DD date, dropping the year when it's the current
+ * year; an optional due_time (HH:MM, 24h) is appended when present. Shared by the
+ * task rows and the home summary so the date reads identically everywhere.
+ */
+export function formatDueDate(iso: string, time: string | null): string {
+  const [y, m, d] = iso.split("-");
+  let out = `${d}/${m}`;
+  if (y !== String(new Date().getFullYear())) out += `/${y}`;
+  if (time) out += ` ${time.slice(0, 5)}`;
+  return out;
+}
+
 /** Short Hebrew cadence label for a recurring task, e.g. "כל יום" / "ימים א ג". */
 export function recurrenceLabel(rule: RecurrenceRule): string {
   if (rule.freq === "daily") return "כל יום";
