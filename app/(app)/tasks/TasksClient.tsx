@@ -762,7 +762,7 @@ function FilterBar({
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "var(--sp-3)", marginBottom: "var(--sp-6)" }}>
       {/* אחריות chips */}
-      <div style={{ display: "flex", gap: "var(--sp-2)", flexWrap: "wrap" }}>
+      <div style={{ display: "flex", gap: "var(--sp-2)", flexWrap: "wrap", overflow: "visible" }}>
         <FilterChip label="הכל" count={counts.all} active={respFilter === "all"} onClick={() => onRespChange("all")} />
         {responsibilities.map((r) => (
           <FilterChip
@@ -779,7 +779,7 @@ function FilterBar({
 
       {/* owner segmented control (secondary) */}
       {adults.length > 0 && (
-        <div style={{ display: "flex", alignItems: "center", gap: "var(--sp-2)", flexWrap: "wrap" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "var(--sp-2)", flexWrap: "wrap", overflow: "visible" }}>
           <span
             style={{
               fontFamily: "var(--font)",
@@ -800,6 +800,7 @@ function FilterBar({
               background: "var(--bg)",
               border: "1px solid var(--border)",
               borderRadius: "var(--r-full)",
+              overflow: "visible", // let the corner badges spill past the pill edge
             }}
           >
             <SegItem label="הכל" count={counts.all} active={ownerFilter === "all"} onClick={() => onOwnerChange("all")} />
@@ -833,18 +834,36 @@ function FilterBar({
   );
 }
 
-// Subtle open-task count shown beside a filter label. Kept at muted-metadata
-// weight/color (never the loud active blue) so it reads as a quiet count, not a
-// notification badge. Tabular figures keep single/double digits from jittering.
+// iOS-style notification badge for the open-task count: a small filled coral
+// circle/pill pinned to the chip's top-start corner (top-right in RTL). Absolutely
+// positioned so it overlaps the corner without changing the chip's own width, and
+// hidden entirely at 0 (no empty dot). Coral is the app's existing attention token
+// — no new color. Single digit → 18px circle; 2 digits → auto-widened pill.
 function CountBadge({ count }: { count: number }) {
+  if (count === 0) return null;
   return (
     <span
       style={{
+        position: "absolute",
+        top: -6,
+        insetInlineStart: -6,
+        zIndex: 1,
+        minWidth: 18,
+        height: 18,
+        padding: "0 5px",
+        boxSizing: "border-box",
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+        borderRadius: "var(--r-full)",
+        background: "var(--jmh-coral)",
+        color: "white",
         fontFamily: "var(--font)",
         fontSize: "var(--text-xs)",
-        fontWeight: 500,
-        color: "var(--text-muted)",
+        fontWeight: 600,
+        lineHeight: 1,
         fontVariantNumeric: "tabular-nums",
+        pointerEvents: "none",
       }}
     >
       {count}
@@ -870,6 +889,7 @@ function FilterChip({
       type="button"
       onClick={onClick}
       style={{
+        position: "relative", // anchor for the absolute corner count badge
         display: "inline-flex",
         alignItems: "center",
         gap: "var(--sp-1)",
@@ -910,6 +930,7 @@ function SegItem({
       type="button"
       onClick={onClick}
       style={{
+        position: "relative", // anchor for the absolute corner count badge
         display: "inline-flex",
         alignItems: "center",
         gap: "var(--sp-1)",
