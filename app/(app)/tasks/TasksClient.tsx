@@ -17,10 +17,12 @@ import { getTaskPeople } from "@/lib/taskPeople";
 import TaskRow from "@/components/ui/TaskRow";
 import AddTaskModal from "@/components/ui/AddTaskModal";
 import CalendarView from "@/components/ui/CalendarView";
+import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import Toast from "@/components/ui/Toast";
 import { CalendarDays, List, Plus } from "lucide-react";
 
 const SAVE_FAILED = "השמירה נכשלה, נסו שוב";
+const DELETE_FAILED = "המחיקה נכשלה, נסו שוב";
 
 interface Props {
   initialTasks: Task[];
@@ -85,6 +87,8 @@ export default function TasksClient({
   // When set, the add-task sheet opens in edit mode for this task (the series
   // parent, for a recurring occurrence).
   const [editingTask, setEditingTask] = useState<Task | null>(null);
+  // The occurrence awaiting delete confirmation (null = no dialog open).
+  const [pendingDelete, setPendingDelete] = useState<Occurrence | null>(null);
   // Transient failure toast for reverted optimistic updates.
   const [toast, setToast] = useState<string | null>(null);
 
@@ -300,13 +304,42 @@ export default function TasksClient({
     }
   }
 
-  async function deleteSeries(task: Task) {
-    if (!window.confirm("למחוק את המשימה החוזרת? כל המופעים יוסרו.")) return;
+  // A row is "recurring" if it's a virtual occurrence expanded from a parent OR
+  // the task itself carries a recurrence_rule (the series parent row).
+  function isRecurringOcc(occ: Occurrence): boolean {
+    return occ.isRecurring || !!occ.task.recurrence_rule;
+  }
+
+  // Decide whether a delete needs confirmation. Done single tasks delete
+  // immediately; open singles and ALL recurring tasks confirm first.
+  function requestDelete(occ: Occurrence) {
+    if (!isRecurringOcc(occ) && occ.status === "done") {
+      performDelete(occ);
+      return;
+    }
+    setPendingDelete(occ);
+  }
+
+  // Optimistic delete. Virtual occurrences aren't DB rows, so we always resolve
+  // to the owning row — the recurrence parent id, falling back to the task's own
+  // id — and delete THAT. Deleting a parent cascades its override rows (FK).
+  async function performDelete(occ: Occurrence) {
+    const targetId = occ.task.recurrence_parent_id ?? occ.task.id;
+    // Snapshot for revert on failure.
+    const removedTask = tasks.find((t) => t.id === targetId) ?? null;
+    const removedOverrides = overrides.filter((o) => o.recurrence_parent_id === targetId);
+
+    setTasks((prev) => prev.filter((t) => t.id !== targetId));
+    setOverrides((prev) => prev.filter((o) => o.recurrence_parent_id !== targetId));
+
     const supabase = createClient();
-    setTasks((prev) => prev.filter((t) => t.id !== task.id));
-    setOverrides((prev) => prev.filter((o) => o.recurrence_parent_id !== task.id));
-    // FK on overrides cascades on delete of the parent.
-    await supabase.from("tasks").delete().eq("id", task.id);
+    const { error } = await supabase.from("tasks").delete().eq("id", targetId);
+    if (error) {
+      // Revert (grouping re-sorts on render, so re-insert order doesn't matter).
+      if (removedTask) setTasks((prev) => [removedTask, ...prev]);
+      if (removedOverrides.length > 0) setOverrides((prev) => [...prev, ...removedOverrides]);
+      setToast(DELETE_FAILED);
+    }
   }
 
   // ── Inline create-new from the add-task sheet (7.2b) ──
@@ -348,6 +381,7 @@ export default function TasksClient({
     label_ids: string[];
     recurrence_rule: RecurrenceRule | null;
     priority: TaskPriority;
+    is_shared: boolean;
   }) {
     const supabase = createClient();
     const memberId = (await getMyMemberId(supabase)) ?? members[0]?.id;
@@ -366,6 +400,7 @@ export default function TasksClient({
         responsibility_id: data.responsibility_id || null,
         status: "open",
         priority: data.priority,
+        is_shared: data.is_shared,
         recurrence_rule: data.recurrence_rule,
         created_by: memberId,
       })
@@ -402,6 +437,7 @@ export default function TasksClient({
     label_ids: string[];
     recurrence_rule: RecurrenceRule | null;
     priority: TaskPriority;
+    is_shared: boolean;
   }) {
     if (!editingTask) return;
     const supabase = createClient();
@@ -418,6 +454,7 @@ export default function TasksClient({
         responsibility_id: data.responsibility_id || null,
         recurrence_rule: data.recurrence_rule,
         priority: data.priority,
+        is_shared: data.is_shared,
         updated_at: new Date().toISOString(),
       })
       .eq("id", id);
@@ -453,6 +490,7 @@ export default function TasksClient({
               responsibility_id: data.responsibility_id || null,
               recurrence_rule: data.recurrence_rule,
               priority: data.priority,
+              is_shared: data.is_shared,
               assignee,
               child,
               responsibility,
@@ -475,7 +513,7 @@ export default function TasksClient({
         isRecurring={occ.isRecurring}
         onToggle={() => toggleOccurrence(occ)}
         onEdit={() => setEditingTask(occ.task)}
-        onDelete={occ.isRecurring ? () => deleteSeries(occ.task) : undefined}
+        onDelete={() => requestDelete(occ)}
       />
     );
   }
@@ -640,6 +678,24 @@ export default function TasksClient({
           onSave={updateTask}
           onCreateResponsibility={createResponsibility}
           onCreateLabel={createLabel}
+        />
+      )}
+
+      {pendingDelete && (
+        <ConfirmDialog
+          title="מחיקת משימה"
+          message={
+            isRecurringOcc(pendingDelete)
+              ? "מחיקת המשימה תמחק את כל המופעים החוזרים שלה. להמשיך?"
+              : "המשימה תימחק לצמיתות. להמשיך?"
+          }
+          confirmLabel="מחיקה"
+          onConfirm={() => {
+            const occ = pendingDelete;
+            setPendingDelete(null);
+            performDelete(occ);
+          }}
+          onCancel={() => setPendingDelete(null)}
         />
       )}
 

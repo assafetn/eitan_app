@@ -25,6 +25,7 @@ interface Props {
     label_ids: string[];
     recurrence_rule: RecurrenceRule | null;
     priority: TaskPriority;
+    is_shared: boolean;
   }) => Promise<void>;
   /** Save edits to an existing task. Same payload shape as onAdd (due_time is
    *  preserved by the parent, not edited here). */
@@ -38,6 +39,7 @@ interface Props {
     label_ids: string[];
     recurrence_rule: RecurrenceRule | null;
     priority: TaskPriority;
+    is_shared: boolean;
   }) => Promise<void>;
   /** Inline-create a responsibility (name + owner). Returns the new row, or
    *  null on failure. The parent persists it and adds it to the list. */
@@ -203,16 +205,21 @@ export default function AddTaskModal({
     e.preventDefault();
     if (!canSubmit) return;
     setSubmitting(true);
+    // "משותף" (no specific adult chosen) means the task belongs to BOTH adults:
+    // is_shared:true + assignee_id:null. A named adult means is_shared:false +
+    // that id. This is the single source of the shared flag on save.
+    const isShared = assigneeId === null;
     const payload = {
       title: title.trim(),
       notes,
       due_date: dueDate,
-      assignee_id: assigneeId,
+      assignee_id: isShared ? null : assigneeId,
       child_id: childId,
       responsibility_id: responsibilityId,
       label_ids: [...labelIds],
       recurrence_rule: buildRecurrenceRule(),
       priority: (urgent ? "high" : "normal") as TaskPriority,
+      is_shared: isShared,
     };
     if (isEditing && onSave) await onSave(payload);
     else await onAdd(payload);
@@ -349,7 +356,7 @@ export default function AddTaskModal({
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             required
-            style={inputStyle}
+            style={{ ...inputStyle, flexShrink: 0 }}
             onFocus={(e) => {
               e.target.style.borderColor = "var(--jmh-blue-60)";
               e.target.style.boxShadow = "0 0 0 3px oklch(0.54 0.14 240 / 0.12)";
@@ -360,15 +367,19 @@ export default function AddTaskModal({
             }}
           />
 
-          {/* Notes */}
+          {/* Notes — multi-line. flexShrink:0 keeps it from being squeezed to a
+              single line by the flex-column body; resize:vertical lets the user
+              grow it without ever breaking the 390px width. */}
           <textarea
             placeholder="הערות (אופציונלי)"
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
-            rows={2}
+            rows={3}
             style={{
               ...inputStyle,
-              resize: "none",
+              flexShrink: 0,
+              minHeight: 80,
+              resize: "vertical",
               lineHeight: 1.5,
             }}
             onFocus={(e) => {
@@ -383,7 +394,7 @@ export default function AddTaskModal({
 
           {/* Due date: quick preset chips + a collapsed calendar behind an icon.
               Chips wrap (no horizontal scroll at 390px); each is a >=44px target. */}
-          <div style={{ display: "flex", flexDirection: "column", gap: "var(--sp-2)" }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: "var(--sp-2)", flexShrink: 0 }}>
             <span style={fieldLabelStyle}>תאריך יעד</span>
             <div style={{ display: "flex", alignItems: "center", gap: "var(--sp-2)", flexWrap: "wrap" }}>
               {datePresets.map((p) => (
@@ -437,11 +448,12 @@ export default function AddTaskModal({
             />
           </div>
 
-          {/* Assignee */}
+          {/* Assignee — the empty "משותף" option means shared (both adults); a
+              named option means that single adult. This drives is_shared on save. */}
           <select
             value={assigneeId ?? ""}
             onChange={(e) => setAssigneeId(e.target.value || null)}
-            style={{ ...inputStyle, appearance: "none", cursor: "pointer" }}
+            style={{ ...inputStyle, appearance: "none", cursor: "pointer", flexShrink: 0 }}
             onFocus={(e) => {
               e.target.style.borderColor = "var(--jmh-blue-60)";
               e.target.style.boxShadow = "0 0 0 3px oklch(0.54 0.14 240 / 0.12)";
@@ -460,7 +472,7 @@ export default function AddTaskModal({
           </select>
 
           {/* Urgency — maps to tasks.priority ('high' when on, else 'normal'). */}
-          <div style={{ display: "flex", flexDirection: "column", gap: "var(--sp-2)" }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: "var(--sp-2)", flexShrink: 0 }}>
             <span style={fieldLabelStyle}>עדיפות</span>
             <div style={{ display: "flex", gap: "var(--sp-2)", flexWrap: "wrap" }}>
               <button
@@ -492,7 +504,7 @@ export default function AddTaskModal({
           </div>
 
           {/* Responsibility selector (single-select, optional) + inline create */}
-          <div style={{ display: "flex", flexDirection: "column", gap: "var(--sp-2)" }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: "var(--sp-2)", flexShrink: 0 }}>
             <span style={fieldLabelStyle}>אחריות</span>
             <div style={{ display: "flex", gap: "var(--sp-2)", flexWrap: "wrap" }}>
               <ChildPill
@@ -530,7 +542,7 @@ export default function AddTaskModal({
           </div>
 
           {/* Labels multi-select (optional) + inline create */}
-          <div style={{ display: "flex", flexDirection: "column", gap: "var(--sp-2)" }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: "var(--sp-2)", flexShrink: 0 }}>
             <span style={fieldLabelStyle}>תוויות</span>
             <div style={{ display: "flex", gap: "var(--sp-2)", flexWrap: "wrap" }}>
               {labels.map((l) => (
@@ -563,7 +575,7 @@ export default function AddTaskModal({
 
           {/* Child selector (optional) */}
           {childMembers.length > 0 && (
-            <div style={{ display: "flex", flexDirection: "column", gap: "var(--sp-2)" }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: "var(--sp-2)", flexShrink: 0 }}>
               <span
                 style={{
                   fontFamily: "var(--font)",
@@ -592,7 +604,7 @@ export default function AddTaskModal({
           )}
 
           {/* Recurrence control */}
-          <div style={{ display: "flex", flexDirection: "column", gap: "var(--sp-2)" }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: "var(--sp-2)", flexShrink: 0 }}>
             <span
               style={{
                 fontFamily: "var(--font)",

@@ -20,7 +20,8 @@ interface Props {
   /** Whether this row is an occurrence of a recurring series. */
   isRecurring: boolean;
   onToggle: () => void;
-  /** Present only for recurring rows — deletes the whole series. */
+  /** Optional. When provided, renders a trash button that requests deletion.
+   *  The list view passes it; the calendar opts out (rows are cramped there). */
   onDelete?: () => void;
   /** Tapping the row body (not the toggle/delete targets) opens edit. */
   onEdit?: () => void;
@@ -280,13 +281,16 @@ export default function TaskRow({ task, adults, date, status, isRecurring, onTog
       {onDelete && (
         <button
           onClick={(e) => { e.stopPropagation(); onDelete(); }}
-          aria-label="מחק סדרה"
+          aria-label="מחיקת משימה"
           style={{
             display: "inline-flex",
             alignItems: "center",
             justifyContent: "center",
             width: 28,
             height: 28,
+            padding: 8, // 8 + 28 + 8 = 44px hit area
+            margin: -8, // keep the 28px visual footprint (row layout unchanged)
+            boxSizing: "content-box",
             borderRadius: "var(--r-sm)",
             background: "transparent",
             border: "none",
