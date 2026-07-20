@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import type { OccurrenceOverride, Task, TaskStatus } from "@/lib/types";
+import type { FamilyMember, OccurrenceOverride, Task, TaskStatus } from "@/lib/types";
 import { addDaysISO, formatDueDate, resolveOccurrencesInRange, todayISO, type ResolvedOccurrence } from "@/lib/recurrence";
 import TaskRow from "@/components/ui/TaskRow";
 import Toast from "@/components/ui/Toast";
@@ -17,6 +17,8 @@ interface Props {
   firstName: string | null;
   initialTasks: Task[];
   initialOverrides: OccurrenceOverride[];
+  /** Household adults — threaded to each TaskRow's person field. */
+  adults: FamilyMember[];
 }
 
 // How far ahead to look for the "next upcoming" fallback.
@@ -50,7 +52,7 @@ function summarySentence(todayCount: number, overdueCount: number): string {
   return s;
 }
 
-export default function HomeClient({ appName, firstName, initialTasks, initialOverrides }: Props) {
+export default function HomeClient({ appName, firstName, initialTasks, initialOverrides, adults }: Props) {
   const router = useRouter();
   const [tasks, setTasks] = useState<Task[]>(initialTasks);
   const [overrides, setOverrides] = useState<OccurrenceOverride[]>(initialOverrides);
@@ -425,6 +427,7 @@ export default function HomeClient({ appName, firstName, initialTasks, initialOv
               >
                 <TaskRow
                   task={occ.task}
+                  adults={adults}
                   date={occ.date}
                   status={occ.status}
                   isRecurring={occ.isRecurring}

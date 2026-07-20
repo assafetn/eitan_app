@@ -1,5 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
-import type { OccurrenceOverride, Task } from "@/lib/types";
+import type { FamilyMember, OccurrenceOverride, Task } from "@/lib/types";
 import { APP_NAME } from "@/lib/constants";
 import HomeClient from "@/components/ui/HomeClient";
 
@@ -12,7 +12,7 @@ export default async function HomePage() {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const [{ data: member }, { data: tasks }, { data: overrides }] = await Promise.all([
+  const [{ data: member }, { data: tasks }, { data: overrides }, { data: adults }] = await Promise.all([
     user
       ? supabase.from("family_members").select("name").eq("auth_user_id", user.id).single()
       : Promise.resolve({ data: null }),
@@ -28,6 +28,7 @@ export default async function HomePage() {
       .from("tasks")
       .select("id, recurrence_parent_id, due_date, status, completed_at")
       .not("recurrence_parent_id", "is", null),
+    supabase.from("family_members").select("*").eq("type", "adult").order("name"),
   ]);
 
   return (
@@ -36,6 +37,7 @@ export default async function HomePage() {
       firstName={(member as { name: string } | null)?.name ?? null}
       initialTasks={(tasks as Task[]) ?? []}
       initialOverrides={(overrides as OccurrenceOverride[]) ?? []}
+      adults={(adults as FamilyMember[]) ?? []}
     />
   );
 }

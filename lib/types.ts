@@ -64,6 +64,9 @@ export interface Task {
   responsibility_id: string | null;
   assignee_id: string | null;
   child_id: string | null;
+  // When true, the task belongs to both adults — getTaskPeople resolves it to
+  // all adults rather than a single owner/assignee.
+  is_shared: boolean;
   due_date: string | null;
   due_time: string | null;
   status: TaskStatus;

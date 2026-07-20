@@ -12,9 +12,6 @@ export default async function TasksPage() {
   // parent itself); done singles are filtered out client-side.
   // Override rows (recurrence_parent_id not null) carry per-occurrence status.
   const [
-    {
-      data: { user },
-    },
     { data: tasks },
     { data: overrides },
     { data: members },
@@ -22,7 +19,6 @@ export default async function TasksPage() {
     { data: responsibilities },
     { data: labels },
   ] = await Promise.all([
-    supabase.auth.getUser(),
     supabase
       .from("tasks")
       .select(
@@ -53,9 +49,6 @@ export default async function TasksPage() {
   ]);
 
   const adults = (members as FamilyMember[]) ?? [];
-  // The logged-in adult's own member id, resolved from the already-fetched
-  // adults (no extra query) — used to preset the owner filter via the "שלי" chip.
-  const currentMemberId = adults.find((m) => m.auth_user_id === user?.id)?.id ?? null;
 
   return (
     <TasksClient
@@ -65,7 +58,6 @@ export default async function TasksPage() {
       childMembers={(children as FamilyMember[]) ?? []}
       responsibilities={(responsibilities as Responsibility[]) ?? []}
       labels={(labels as Label[]) ?? []}
-      currentMemberId={currentMemberId}
       showFilter
       showViewToggle
     />

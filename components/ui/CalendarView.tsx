@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import type { OccurrenceOverride, Task } from "@/lib/types";
+import type { FamilyMember, OccurrenceOverride, Task } from "@/lib/types";
 import {
   addDaysISO,
   resolveOccurrencesInRange,
@@ -18,6 +18,8 @@ interface Props {
   /** Shared with the list view — ONE data source, no second fetch. */
   tasks: Task[];
   overrides: OccurrenceOverride[];
+  /** The household adults — passed through to each TaskRow's person field. */
+  adults: FamilyMember[];
   /** The 7.3 אחריות/owner filter predicate, shared with the list view. */
   filterTask: (t: Task) => boolean;
   /** The SAME override-writing toggle the list uses — updates shared state, so
@@ -34,7 +36,7 @@ function dotColor(occ: ResolvedOccurrence): string {
   return `var(--${token})`;
 }
 
-export default function CalendarView({ tasks, overrides, filterTask, onToggle, onEdit }: Props) {
+export default function CalendarView({ tasks, overrides, adults, filterTask, onToggle, onEdit }: Props) {
   const now = new Date();
   const [viewYear, setViewYear] = useState(now.getFullYear());
   const [viewMonth, setViewMonth] = useState(now.getMonth()); // 0–11
@@ -226,6 +228,7 @@ export default function CalendarView({ tasks, overrides, filterTask, onToggle, o
         <DayDetailSheet
           date={selectedDate}
           occurrences={detailOccurrences}
+          adults={adults}
           onClose={() => setSelectedDate(null)}
           onToggle={onToggle}
           onEdit={onEdit}
@@ -271,12 +274,14 @@ function NavButton({
 function DayDetailSheet({
   date,
   occurrences,
+  adults,
   onClose,
   onToggle,
   onEdit,
 }: {
   date: string;
   occurrences: ResolvedOccurrence[];
+  adults: FamilyMember[];
   onClose: () => void;
   onToggle: (occ: ResolvedOccurrence) => void;
   onEdit?: (occ: ResolvedOccurrence) => void;
@@ -384,6 +389,7 @@ function DayDetailSheet({
               <TaskRow
                 key={occ.key}
                 task={occ.task}
+                adults={adults}
                 date={occ.date}
                 status={occ.status}
                 isRecurring={occ.isRecurring}

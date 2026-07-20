@@ -1,9 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import type { FamilyMember, Label, RecurrenceRule, Responsibility, Task, Weekday } from "@/lib/types";
-import { WEEKDAY_KEYS, WEEKDAY_LETTERS } from "@/lib/recurrence";
-import { Check, Plus, X } from "lucide-react";
+import type { FamilyMember, Label, RecurrenceRule, Responsibility, Task, TaskPriority, Weekday } from "@/lib/types";
+import { addDaysISO, todayISO, WEEKDAY_KEYS, WEEKDAY_LETTERS } from "@/lib/recurrence";
+import { Calendar, Check, Plus, X } from "lucide-react";
 
 interface Props {
   members: FamilyMember[];
@@ -24,9 +24,10 @@ interface Props {
     responsibility_id: string | null;
     label_ids: string[];
     recurrence_rule: RecurrenceRule | null;
+    priority: TaskPriority;
   }) => Promise<void>;
-  /** Save edits to an existing task. Same payload shape as onAdd (priority and
-   *  due_time are preserved by the parent, not edited here). */
+  /** Save edits to an existing task. Same payload shape as onAdd (due_time is
+   *  preserved by the parent, not edited here). */
   onSave?: (data: {
     title: string;
     notes: string;
@@ -36,6 +37,7 @@ interface Props {
     responsibility_id: string | null;
     label_ids: string[];
     recurrence_rule: RecurrenceRule | null;
+    priority: TaskPriority;
   }) => Promise<void>;
   /** Inline-create a responsibility (name + owner). Returns the new row, or
    *  null on failure. The parent persists it and adds it to the list. */
@@ -92,6 +94,22 @@ export default function AddTaskModal({
   const [title, setTitle] = useState(editingTask?.title ?? "");
   const [notes, setNotes] = useState(editingTask?.notes ?? "");
   const [dueDate, setDueDate] = useState(editingTask?.due_date ?? "");
+  // "דחוף" — maps to the tasks.priority column ('high' | 'normal'), not a Label.
+  const [urgent, setUrgent] = useState(editingTask?.priority === "high");
+  // The calendar is collapsed by default behind an icon button; quick chips
+  // cover the common dates. Auto-reveal when editing a task whose existing date
+  // matches none of the presets, so the chosen date stays visible/changeable.
+  const today = todayISO();
+  const datePresets: { label: string; value: string }[] = [
+    { label: "היום", value: today },
+    { label: "מחר", value: addDaysISO(today, 1) },
+    { label: "בעוד 3 ימים", value: addDaysISO(today, 3) },
+    { label: "שבוע הבא", value: addDaysISO(today, 7) },
+  ];
+  const initialDate = editingTask?.due_date ?? "";
+  const [showPicker, setShowPicker] = useState(
+    !!initialDate && !datePresets.some((p) => p.value === initialDate)
+  );
   const [assigneeId, setAssigneeId] = useState<string | null>(editingTask?.assignee_id ?? null);
   const [childId, setChildId] = useState<string | null>(editingTask?.child_id ?? null);
   const [responsibilityId, setResponsibilityId] = useState<string | null>(
@@ -156,6 +174,7 @@ export default function AddTaskModal({
       responsibility_id: responsibilityId,
       label_ids: [...labelIds],
       recurrence_rule: buildRecurrenceRule(),
+      priority: (urgent ? "high" : "normal") as TaskPriority,
     };
     if (isEditing && onSave) await onSave(payload);
     else await onAdd(payload);
@@ -282,43 +301,112 @@ export default function AddTaskModal({
             }}
           />
 
-          {/* Due date + assignee row */}
-          <div style={{ display: "flex", gap: "var(--sp-2)" }}>
-            <input
-              type="date"
-              value={dueDate}
-              onChange={(e) => setDueDate(e.target.value)}
-              style={{ ...inputStyle, flex: 1 }}
-              onFocus={(e) => {
-                e.target.style.borderColor = "var(--jmh-blue-60)";
-                e.target.style.boxShadow = "0 0 0 3px oklch(0.54 0.14 240 / 0.12)";
-              }}
-              onBlur={(e) => {
-                e.target.style.borderColor = "var(--border-strong)";
-                e.target.style.boxShadow = "none";
-              }}
-            />
-
-            <select
-              value={assigneeId ?? ""}
-              onChange={(e) => setAssigneeId(e.target.value || null)}
-              style={{ ...inputStyle, flex: 1, appearance: "none", cursor: "pointer" }}
-              onFocus={(e) => {
-                e.target.style.borderColor = "var(--jmh-blue-60)";
-                e.target.style.boxShadow = "0 0 0 3px oklch(0.54 0.14 240 / 0.12)";
-              }}
-              onBlur={(e) => {
-                e.target.style.borderColor = "var(--border-strong)";
-                e.target.style.boxShadow = "none";
-              }}
-            >
-              <option value="">משותף</option>
-              {members.map((m) => (
-                <option key={m.id} value={m.id}>
-                  {m.name}
-                </option>
+          {/* Due date: quick preset chips + a collapsed calendar behind an icon.
+              Chips wrap (no horizontal scroll at 390px); each is a >=44px target. */}
+          <div style={{ display: "flex", flexDirection: "column", gap: "var(--sp-2)" }}>
+            <span style={fieldLabelStyle}>תאריך יעד</span>
+            <div style={{ display: "flex", alignItems: "center", gap: "var(--sp-2)", flexWrap: "wrap" }}>
+              {datePresets.map((p) => (
+                <DateChip
+                  key={p.value}
+                  label={p.label}
+                  active={dueDate === p.value}
+                  onClick={() => setDueDate(p.value)}
+                />
               ))}
-            </select>
+              <button
+                type="button"
+                aria-label="בחר תאריך אחר"
+                aria-expanded={showPicker}
+                onClick={() => setShowPicker((s) => !s)}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  width: 44,
+                  height: 44,
+                  borderRadius: "var(--r-full)",
+                  border: `1px solid ${showPicker ? "var(--jmh-blue-30)" : "var(--border-strong)"}`,
+                  background: showPicker ? "var(--jmh-blue-05)" : "var(--surface)",
+                  color: showPicker ? "var(--jmh-blue)" : "var(--text-secondary)",
+                  cursor: "pointer",
+                  flexShrink: 0,
+                  transition: `all var(--dur-fast) var(--ease-out)`,
+                }}
+              >
+                <Calendar size={18} strokeWidth={2} />
+              </button>
+            </div>
+            {showPicker && (
+              <input
+                type="date"
+                value={dueDate}
+                onChange={(e) => setDueDate(e.target.value)}
+                style={inputStyle}
+                onFocus={(e) => {
+                  e.target.style.borderColor = "var(--jmh-blue-60)";
+                  e.target.style.boxShadow = "0 0 0 3px oklch(0.54 0.14 240 / 0.12)";
+                }}
+                onBlur={(e) => {
+                  e.target.style.borderColor = "var(--border-strong)";
+                  e.target.style.boxShadow = "none";
+                }}
+              />
+            )}
+          </div>
+
+          {/* Assignee */}
+          <select
+            value={assigneeId ?? ""}
+            onChange={(e) => setAssigneeId(e.target.value || null)}
+            style={{ ...inputStyle, appearance: "none", cursor: "pointer" }}
+            onFocus={(e) => {
+              e.target.style.borderColor = "var(--jmh-blue-60)";
+              e.target.style.boxShadow = "0 0 0 3px oklch(0.54 0.14 240 / 0.12)";
+            }}
+            onBlur={(e) => {
+              e.target.style.borderColor = "var(--border-strong)";
+              e.target.style.boxShadow = "none";
+            }}
+          >
+            <option value="">משותף</option>
+            {members.map((m) => (
+              <option key={m.id} value={m.id}>
+                {m.name}
+              </option>
+            ))}
+          </select>
+
+          {/* Urgency — maps to tasks.priority ('high' when on, else 'normal'). */}
+          <div style={{ display: "flex", flexDirection: "column", gap: "var(--sp-2)" }}>
+            <span style={fieldLabelStyle}>עדיפות</span>
+            <div style={{ display: "flex", gap: "var(--sp-2)", flexWrap: "wrap" }}>
+              <button
+                type="button"
+                onClick={() => setUrgent((u) => !u)}
+                aria-pressed={urgent}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  minHeight: 44,
+                  padding: "0 16px",
+                  borderRadius: "var(--r-full)",
+                  border: `1px solid ${urgent ? "var(--jmh-coral)" : "var(--border-strong)"}`,
+                  background: urgent
+                    ? "color-mix(in oklch, var(--jmh-coral) 12%, var(--surface))"
+                    : "var(--surface)",
+                  color: urgent ? "var(--jmh-coral)" : "var(--text-secondary)",
+                  fontFamily: "var(--font)",
+                  fontSize: "var(--text-sm)",
+                  fontWeight: urgent ? 600 : 400,
+                  cursor: "pointer",
+                  transition: `all var(--dur-fast) var(--ease-out)`,
+                }}
+              >
+                דחוף
+              </button>
+            </div>
           </div>
 
           {/* Responsibility selector (single-select, optional) + inline create */}
@@ -695,6 +783,37 @@ function InlineCreate({
         </button>
       </div>
     </div>
+  );
+}
+
+// Quick date preset chip. >=44px touch target (minHeight), pill styling that
+// matches the other selectable chips, with a selected (active) state.
+function DateChip({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+        minHeight: 44,
+        padding: "0 16px",
+        borderRadius: "var(--r-full)",
+        border: `1px solid ${active ? "var(--jmh-blue-30)" : "var(--border-strong)"}`,
+        background: active ? "var(--jmh-blue-05)" : "var(--surface)",
+        color: active ? "var(--jmh-blue)" : "var(--text-secondary)",
+        fontFamily: "var(--font)",
+        fontSize: "var(--text-sm)",
+        fontWeight: active ? 600 : 400,
+        cursor: "pointer",
+        whiteSpace: "nowrap",
+        transition: `all var(--dur-fast) var(--ease-out)`,
+      }}
+    >
+      {label}
+    </button>
   );
 }
 

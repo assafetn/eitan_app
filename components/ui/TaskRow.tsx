@@ -1,7 +1,8 @@
 "use client";
 
-import type { Label, Responsibility, Task, TaskStatus } from "@/lib/types";
+import type { FamilyMember, Label, Responsibility, Task, TaskStatus } from "@/lib/types";
 import { formatDueDate, recurrenceLabel, todayISO } from "@/lib/recurrence";
+import { getTaskPeople } from "@/lib/taskPeople";
 import { Calendar, Check, Repeat, Trash2, User } from "lucide-react";
 
 // At 390px we show at most this many label chips, then a "+N" overflow chip,
@@ -10,6 +11,8 @@ const LABEL_CAP = 2;
 
 interface Props {
   task: Task;
+  /** The household adults — used to resolve a shared task to both people. */
+  adults: FamilyMember[];
   /** The occurrence/display date (YYYY-MM-DD), or null for an undated single. */
   date: string | null;
   /** Resolved status for this occurrence. */
@@ -23,9 +26,14 @@ interface Props {
   onEdit?: () => void;
 }
 
-export default function TaskRow({ task, date, status, isRecurring, onToggle, onDelete, onEdit }: Props) {
+export default function TaskRow({ task, adults, date, status, isRecurring, onToggle, onDelete, onEdit }: Props) {
   const isDone = status === "done";
   const isUrgent = date ? date < todayISO() : false;
+  // High-priority ("דחוף") signalling: a coral background tint + an explicit
+  // text chip (never colour alone). Completed rows opt out entirely — the
+  // dimmed done styling takes over. Independent of `isUrgent`/overdue, so an
+  // overdue high-priority task keeps both its coral edge strip and this tint.
+  const isHighPriority = task.priority === "high" && !isDone;
 
   const responsibility = task.responsibility ?? null;
   const labels = task.labels ?? [];
@@ -39,17 +47,12 @@ export default function TaskRow({ task, date, status, isRecurring, onToggle, onD
     ? "var(--jmh-gold)"
     : "var(--border-strong)";
 
-  // "Owner" = the adult who owns this task's responsibility (not the assignee).
-  // Nothing shown when the task has no responsibility.
-  const ownerName = responsibility?.owner?.name ?? null;
+  // The single derived "who owns this task" concept: shared → both adults, else
+  // the assignee, else the responsibility owner. One field, rendered from one
+  // User icon — no more separate owner + "מבצע" assignee.
+  const people = getTaskPeople(task, adults);
+  const peopleNames = people.map((p) => p.name).join(" · ");
   const child = task.child ?? null;
-
-  // Assignee ("מבצע") — the adult the task is assigned to, resolved from the same
-  // joined member as owner/child. Only worth surfacing when it adds information:
-  // it exists AND isn't the same person as the responsibility owner (otherwise
-  // it's redundant noise next to the owner label).
-  const assignee = task.assignee ?? null;
-  const showAssignee = !!assignee && task.assignee_id !== (responsibility?.owner_id ?? null);
 
   return (
     <div
@@ -57,7 +60,9 @@ export default function TaskRow({ task, date, status, isRecurring, onToggle, onD
       onClick={onEdit}
       style={{
         "--strip-color": stripColor,
-        background: "var(--surface)",
+        background: isHighPriority
+          ? "color-mix(in oklch, var(--jmh-coral) 8%, var(--surface))"
+          : "var(--surface)",
         border: "1px solid var(--border)",
         borderRadius: "var(--r-md)",
         padding: "12px 14px 12px 17px",
@@ -144,8 +149,8 @@ export default function TaskRow({ task, date, status, isRecurring, onToggle, onD
         </div>
 
         {(() => {
-          // Build the metadata row (date · recurrence · owner · assignee · child)
-          // as an ordered list so dot separators only appear between present items.
+          // Build the metadata row (date · recurrence · person(s) · child) as an
+          // ordered list so dot separators only appear between present items.
           const dateNode = date ? (
             <span
               style={{
@@ -170,7 +175,9 @@ export default function TaskRow({ task, date, status, isRecurring, onToggle, onD
               </span>
             ) : null;
 
-          const ownerNode = ownerName ? (
+          // One person field: a single User icon then the name, or both names
+          // joined by " · " for a shared task. No word-prefix.
+          const peopleNode = peopleNames ? (
             <span
               style={{
                 display: "inline-flex",
@@ -182,26 +189,7 @@ export default function TaskRow({ task, date, status, isRecurring, onToggle, onD
               }}
             >
               <User size={11} strokeWidth={2} style={{ flexShrink: 0 }} />
-              {ownerName}
-            </span>
-          ) : null;
-
-          // Distinguished from the owner (which leads with a User icon) by a short
-          // muted "מבצע" prefix label — same muted-metadata token, no icon, so the
-          // two people never read as the same field.
-          const assigneeNode = showAssignee ? (
-            <span
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 4,
-                fontFamily: "var(--font)",
-                fontSize: 11,
-                color: "var(--text-muted)",
-              }}
-            >
-              <span style={{ fontWeight: 500 }}>מבצע</span>
-              {assignee!.name}
+              {peopleNames}
             </span>
           ) : null;
 
@@ -229,11 +217,35 @@ export default function TaskRow({ task, date, status, isRecurring, onToggle, onD
             </span>
           ) : null;
 
-          const items = [dateNode, recurrenceNode, ownerNode, assigneeNode, childNode].filter(Boolean);
-          if (items.length === 0) return null;
+          // "דחוף" text chip — the required non-colour signal for a high-priority
+          // open task. A distinct pill, so it sits before the dotted metadata
+          // without a dot separator of its own.
+          const urgentNode = isHighPriority ? (
+            <span
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                padding: "1px 8px",
+                borderRadius: "var(--r-full)",
+                background: "color-mix(in oklch, var(--jmh-coral) 14%, var(--surface))",
+                border: "1px solid color-mix(in oklch, var(--jmh-coral) 30%, transparent)",
+                fontFamily: "var(--font)",
+                fontSize: 11,
+                fontWeight: 600,
+                color: "var(--jmh-coral)",
+                flexShrink: 0,
+              }}
+            >
+              דחוף
+            </span>
+          ) : null;
+
+          const items = [dateNode, recurrenceNode, peopleNode, childNode].filter(Boolean);
+          if (!urgentNode && items.length === 0) return null;
 
           return (
             <div style={{ display: "flex", alignItems: "center", gap: "var(--sp-2)", flexWrap: "wrap" }}>
+              {urgentNode}
               {items.map((node, i) => (
                 <span key={i} style={{ display: "inline-flex", alignItems: "center", gap: "var(--sp-2)" }}>
                   {i > 0 && <span style={{ color: "var(--border-strong)", fontSize: 11 }}>·</span>}

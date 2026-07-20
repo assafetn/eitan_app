@@ -9,9 +9,11 @@ import type {
   RecurrenceRule,
   Responsibility,
   Task,
+  TaskPriority,
   TaskStatus,
 } from "@/lib/types";
 import { addDaysISO, expandOccurrences, isCompletedOccurrenceVisible, todayISO } from "@/lib/recurrence";
+import { getTaskPeople } from "@/lib/taskPeople";
 import TaskRow from "@/components/ui/TaskRow";
 import AddTaskModal from "@/components/ui/AddTaskModal";
 import CalendarView from "@/components/ui/CalendarView";
@@ -39,8 +41,6 @@ interface Props {
   showFilter?: boolean;
   /** Whether to show the רשימה/לוח שנה view toggle. /tasks only; off elsewhere. */
   showViewToggle?: boolean;
-  /** The logged-in adult's member id, for the "שלי" owner quick-filter. */
-  currentMemberId?: string | null;
 }
 
 // אחריות filter selection: a responsibility id, "all", or "none" (unassigned).
@@ -74,7 +74,6 @@ export default function TasksClient({
   openOnly = false,
   showFilter = false,
   showViewToggle = false,
-  currentMemberId = null,
 }: Props) {
   const [tasks, setTasks] = useState<Task[]>(initialTasks);
   const [overrides, setOverrides] = useState<OccurrenceOverride[]>(initialOverrides);
@@ -159,18 +158,21 @@ export default function TasksClient({
       if (occ.status !== "open") continue; // open only — exclude done/completed
       const t = occ.task;
       allSet.add(t.id);
+      // אחריות counts — driven by responsibility_id, matching the respFilter cut.
       if (t.responsibility_id) {
         let rs = respSets.get(t.responsibility_id);
         if (!rs) respSets.set(t.responsibility_id, (rs = new Set()));
         rs.add(t.id);
-        const ownerId = t.responsibility?.owner_id;
-        if (ownerId) {
-          let os = ownerSets.get(ownerId);
-          if (!os) ownerSets.set(ownerId, (os = new Set()));
-          os.add(t.id);
-        }
       } else {
         noneSet.add(t.id);
+      }
+      // owner counts — driven by the SAME getTaskPeople predicate the owner cut
+      // uses below, so a shared task counts for both adults and counts never
+      // disagree with the rows the filter shows.
+      for (const p of getTaskPeople(t, members)) {
+        let os = ownerSets.get(p.id);
+        if (!os) ownerSets.set(p.id, (os = new Set()));
+        os.add(t.id);
       }
     }
     const resp: Record<string, number> = {};
@@ -178,7 +180,7 @@ export default function TasksClient({
     const owner: Record<string, number> = {};
     ownerSets.forEach((s, id) => (owner[id] = s.size));
     return { all: allSet.size, none: noneSet.size, resp, owner };
-  }, [occurrences]);
+  }, [occurrences, members]);
 
   // ONE filter predicate, shared by BOTH views. Recurring occurrences carry
   // their series parent in `occ.task`, so filtering by responsibility/owner
@@ -193,13 +195,16 @@ export default function TasksClient({
       } else if (respFilter !== "all") {
         if (t.responsibility_id !== respFilter) return false;
       }
-      // owner cut — tasks with no responsibility have no owner, so excluded.
+      // owner cut — tested against the derived people (shared → both adults,
+      // else assignee, else responsibility owner). A shared task matches BOTH
+      // adults' filters; a task with no people matches neither.
       if (ownerFilter !== "all") {
-        if (!t.responsibility || t.responsibility.owner_id !== ownerFilter) return false;
+        const peopleIds = getTaskPeople(t, members).map((p) => p.id);
+        if (!peopleIds.includes(ownerFilter)) return false;
       }
       return true;
     },
-    [respFilter, ownerFilter]
+    [respFilter, ownerFilter, members]
   );
 
   // List view: narrow the resolved occurrences; date grouping below is unchanged.
@@ -342,6 +347,7 @@ export default function TasksClient({
     responsibility_id: string | null;
     label_ids: string[];
     recurrence_rule: RecurrenceRule | null;
+    priority: TaskPriority;
   }) {
     const supabase = createClient();
     const memberId = (await getMyMemberId(supabase)) ?? members[0]?.id;
@@ -359,7 +365,7 @@ export default function TasksClient({
         child_id: data.child_id || null,
         responsibility_id: data.responsibility_id || null,
         status: "open",
-        priority: "normal",
+        priority: data.priority,
         recurrence_rule: data.recurrence_rule,
         created_by: memberId,
       })
@@ -385,7 +391,7 @@ export default function TasksClient({
   }
 
   // ── Save edits to an existing task (the series parent for a recurring row) ──
-  // priority + due_time aren't editable in the sheet, so they're left untouched.
+  // due_time isn't editable in the sheet, so it's left untouched.
   async function updateTask(data: {
     title: string;
     notes: string;
@@ -395,6 +401,7 @@ export default function TasksClient({
     responsibility_id: string | null;
     label_ids: string[];
     recurrence_rule: RecurrenceRule | null;
+    priority: TaskPriority;
   }) {
     if (!editingTask) return;
     const supabase = createClient();
@@ -410,6 +417,7 @@ export default function TasksClient({
         child_id: data.child_id || null,
         responsibility_id: data.responsibility_id || null,
         recurrence_rule: data.recurrence_rule,
+        priority: data.priority,
         updated_at: new Date().toISOString(),
       })
       .eq("id", id);
@@ -444,6 +452,7 @@ export default function TasksClient({
               child_id: data.child_id || null,
               responsibility_id: data.responsibility_id || null,
               recurrence_rule: data.recurrence_rule,
+              priority: data.priority,
               assignee,
               child,
               responsibility,
@@ -460,6 +469,7 @@ export default function TasksClient({
       <TaskRow
         key={occ.key}
         task={occ.task}
+        adults={members}
         date={occ.date}
         status={occ.status}
         isRecurring={occ.isRecurring}
@@ -555,7 +565,6 @@ export default function TasksClient({
           ownerFilter={ownerFilter}
           onRespChange={setRespFilter}
           onOwnerChange={setOwnerFilter}
-          currentMemberId={currentMemberId}
           counts={filterCounts}
         />
       )}
@@ -564,6 +573,7 @@ export default function TasksClient({
         <CalendarView
           tasks={tasks}
           overrides={overrides}
+          adults={members}
           filterTask={matchesFilter}
           onToggle={toggleOccurrence}
           onEdit={(occ) => setEditingTask(occ.task)}
@@ -746,7 +756,6 @@ function FilterBar({
   ownerFilter,
   onRespChange,
   onOwnerChange,
-  currentMemberId,
   counts,
 }: {
   responsibilities: Responsibility[];
@@ -755,14 +764,13 @@ function FilterBar({
   ownerFilter: OwnerFilter;
   onRespChange: (f: RespFilter) => void;
   onOwnerChange: (f: OwnerFilter) => void;
-  currentMemberId: string | null;
   /** Open-task counts per filter label (per-label totals, filter-independent). */
   counts: { all: number; none: number; resp: Record<string, number>; owner: Record<string, number> };
 }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "var(--sp-3)", marginBottom: "var(--sp-6)" }}>
       {/* אחריות chips */}
-      <div style={{ display: "flex", gap: "var(--sp-2)", flexWrap: "wrap", overflow: "visible" }}>
+      <div style={{ display: "flex", gap: "var(--sp-2)", flexWrap: "wrap" }}>
         <FilterChip label="הכל" count={counts.all} active={respFilter === "all"} onClick={() => onRespChange("all")} />
         {responsibilities.map((r) => (
           <FilterChip
@@ -779,7 +787,7 @@ function FilterBar({
 
       {/* owner segmented control (secondary) */}
       {adults.length > 0 && (
-        <div style={{ display: "flex", alignItems: "center", gap: "var(--sp-2)", flexWrap: "wrap", overflow: "visible" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "var(--sp-2)", flexWrap: "wrap" }}>
           <span
             style={{
               fontFamily: "var(--font)",
@@ -800,7 +808,6 @@ function FilterBar({
               background: "var(--bg)",
               border: "1px solid var(--border)",
               borderRadius: "var(--r-full)",
-              overflow: "visible", // let the corner badges spill past the pill edge
             }}
           >
             <SegItem label="הכל" count={counts.all} active={ownerFilter === "all"} onClick={() => onOwnerChange("all")} />
@@ -814,56 +821,25 @@ function FilterBar({
               />
             ))}
           </div>
-
-          {/* "שלי" quick-filter — presets the owner cut to the logged-in adult.
-              A shortcut only: it toggles the SAME ownerFilter state the control
-              above drives, so list + calendar stay in sync via matchesFilter. */}
-          {currentMemberId && (
-            <FilterChip
-              label="שלי"
-              count={counts.owner[currentMemberId] ?? 0}
-              active={ownerFilter === currentMemberId}
-              onClick={() =>
-                onOwnerChange(ownerFilter === currentMemberId ? "all" : currentMemberId)
-              }
-            />
-          )}
         </div>
       )}
     </div>
   );
 }
 
-// iOS-style notification badge for the open-task count: a small filled coral
-// circle/pill pinned to the chip's top-start corner (top-right in RTL). Absolutely
-// positioned so it overlaps the corner without changing the chip's own width, and
-// hidden entirely at 0 (no empty dot). Coral is the app's existing attention token
-// — no new color. Single digit → 18px circle; 2 digits → auto-widened pill.
-function CountBadge({ count }: { count: number }) {
+// Subtle inline open-task count: sits right after the chip's label, in the same
+// muted metadata weight, hidden entirely at 0. On a selected chip it inherits the
+// chip's (selected) foreground so it stays legible against the active fill.
+function InlineCount({ count, active }: { count: number; active: boolean }) {
   if (count === 0) return null;
   return (
     <span
       style={{
-        position: "absolute",
-        top: -6,
-        insetInlineStart: -6,
-        zIndex: 1,
-        minWidth: 18,
-        height: 18,
-        padding: "0 5px",
-        boxSizing: "border-box",
-        display: "inline-flex",
-        alignItems: "center",
-        justifyContent: "center",
-        borderRadius: "var(--r-full)",
-        background: "var(--jmh-coral)",
-        color: "white",
-        fontFamily: "var(--font)",
-        fontSize: "var(--text-xs)",
-        fontWeight: 600,
-        lineHeight: 1,
+        marginInlineStart: 4,
+        fontSize: 12,
+        fontWeight: 500,
+        color: active ? "inherit" : "var(--text-muted)",
         fontVariantNumeric: "tabular-nums",
-        pointerEvents: "none",
       }}
     >
       {count}
@@ -889,7 +865,6 @@ function FilterChip({
       type="button"
       onClick={onClick}
       style={{
-        position: "relative", // anchor for the absolute corner count badge
         display: "inline-flex",
         alignItems: "center",
         gap: "var(--sp-1)",
@@ -909,7 +884,7 @@ function FilterChip({
         <span style={{ width: 7, height: 7, borderRadius: "50%", background: `var(--${color})`, flexShrink: 0 }} />
       )}
       {label}
-      {typeof count === "number" && <CountBadge count={count} />}
+      {typeof count === "number" && <InlineCount count={count} active={active} />}
     </button>
   );
 }
@@ -930,7 +905,6 @@ function SegItem({
       type="button"
       onClick={onClick}
       style={{
-        position: "relative", // anchor for the absolute corner count badge
         display: "inline-flex",
         alignItems: "center",
         gap: "var(--sp-1)",
@@ -948,7 +922,7 @@ function SegItem({
       }}
     >
       {label}
-      {typeof count === "number" && <CountBadge count={count} />}
+      {typeof count === "number" && <InlineCount count={count} active={active} />}
     </button>
   );
 }
