@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { FamilyMember, Label, RecurrenceRule, Responsibility, Task, TaskPriority, Weekday } from "@/lib/types";
 import { addDaysISO, todayISO, WEEKDAY_KEYS, WEEKDAY_LETTERS } from "@/lib/recurrence";
 import { Calendar, Check, Plus, X } from "lucide-react";
@@ -78,6 +78,16 @@ const fieldLabelStyle: React.CSSProperties = {
   color: "var(--text-muted)",
 };
 
+// The sheet's max-height must fall back gracefully: older engines that don't
+// understand `dvh` keep the `vh` line; modern mobile Safari uses `dvh` (which
+// tracks the visible viewport incl. the address bar). Two `max-height`
+// declarations in one rule can't be expressed in a React style object (keys
+// collapse), so this rule is injected once. The `vh` line is intentionally
+// listed before the `dvh` override.
+const SHEET_CSS = `
+.atm-sheet { max-height: 90vh; max-height: 90dvh; }
+`;
+
 export default function AddTaskModal({
   members,
   childMembers,
@@ -106,10 +116,9 @@ export default function AddTaskModal({
     { label: "בעוד 3 ימים", value: addDaysISO(today, 3) },
     { label: "שבוע הבא", value: addDaysISO(today, 7) },
   ];
-  const initialDate = editingTask?.due_date ?? "";
-  const [showPicker, setShowPicker] = useState(
-    !!initialDate && !datePresets.some((p) => p.value === initialDate)
-  );
+  // The single (visually hidden) native date input; the calendar icon opens it
+  // directly via showPicker(), so there's no intermediate reveal step.
+  const dateInputRef = useRef<HTMLInputElement>(null);
   const [assigneeId, setAssigneeId] = useState<string | null>(editingTask?.assignee_id ?? null);
   const [childId, setChildId] = useState<string | null>(editingTask?.child_id ?? null);
   const [responsibilityId, setResponsibilityId] = useState<string | null>(
@@ -133,6 +142,35 @@ export default function AddTaskModal({
 
   const weeklyNeedsDays = recurrence === "weekly" && weekDays.size === 0;
   const canSubmit = !!title.trim() && !weeklyNeedsDays && !submitting;
+
+  // Lock background scroll while the modal is open; restore the prior value in
+  // the cleanup so it can't leak even if this component throws while mounted.
+  useEffect(() => {
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previous;
+    };
+  }, []);
+
+  // Open the native date picker straight from the icon tap. showPicker() is the
+  // modern path (and may throw without a user gesture); focus()+click() is the
+  // fallback for engines that lack it.
+  function openDatePicker() {
+    const el = dateInputRef.current;
+    if (!el) return;
+    const withPicker = el as HTMLInputElement & { showPicker?: () => void };
+    if (typeof withPicker.showPicker === "function") {
+      try {
+        withPicker.showPicker();
+        return;
+      } catch {
+        // fall through to focus + click
+      }
+    }
+    el.focus();
+    el.click();
+  }
 
   function toggleLabel(id: string) {
     setLabelIds((prev) => {
@@ -194,8 +232,11 @@ export default function AddTaskModal({
         }}
       />
 
-      {/* Sheet */}
+      {/* Sheet — strict 3-zone flex column: header (pinned) / body (scrolls) /
+          footer (pinned, clears the iOS home indicator). Height is capped with a
+          dvh max-height (vh fallback) via the .atm-sheet rule. */}
       <div
+        className="atm-sheet"
         style={{
           position: "fixed",
           bottom: 0,
@@ -203,66 +244,105 @@ export default function AddTaskModal({
           insetInlineEnd: 0,
           background: "var(--surface)",
           borderRadius: "var(--r-xl) var(--r-xl) 0 0",
-          padding: "var(--sp-5) var(--sp-5) calc(var(--sp-8) + env(safe-area-inset-bottom, 0px))",
           zIndex: 70,
           boxShadow: "var(--shadow-xl)",
           maxWidth: 600,
           margin: "0 auto",
+          display: "flex",
+          flexDirection: "column",
+          overflow: "hidden",
         }}
       >
-        {/* Handle */}
+        {/* HEADER zone — flex:0 0 auto; never shrinks, never scrolls. Surface
+            background + bottom hairline so it reads as pinned when body scrolls. */}
         <div
           style={{
-            width: 36,
-            height: 4,
-            borderRadius: "var(--r-full)",
-            background: "var(--border)",
-            margin: "0 auto var(--sp-4)",
-          }}
-        />
-
-        {/* Header row */}
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            marginBottom: "var(--sp-5)",
+            flex: "0 0 auto",
+            background: "var(--surface)",
+            borderBottom: "1px solid var(--border)",
+            padding: "var(--sp-3) var(--sp-5) var(--sp-4)",
           }}
         >
-          <h2
+          {/* Handle */}
+          <div
             style={{
-              fontFamily: "var(--font)",
-              fontSize: "var(--text-lg)",
-              fontWeight: 600,
-              letterSpacing: "-0.01em",
-              color: "var(--text-primary)",
-              margin: 0,
-            }}
-          >
-            {isEditing ? "עריכת משימה" : "משימה חדשה"}
-          </h2>
-          <button
-            onClick={onClose}
-            style={{
-              width: 32,
-              height: 32,
+              width: 36,
+              height: 4,
               borderRadius: "var(--r-full)",
-              background: "var(--bg)",
-              border: "1px solid var(--border)",
+              background: "var(--border)",
+              margin: "0 auto var(--sp-3)",
+            }}
+          />
+
+          <div
+            style={{
               display: "flex",
               alignItems: "center",
-              justifyContent: "center",
-              cursor: "pointer",
-              color: "var(--text-muted)",
+              justifyContent: "space-between",
             }}
           >
-            <X size={16} strokeWidth={2} />
-          </button>
+            <h2
+              style={{
+                fontFamily: "var(--font)",
+                fontSize: "var(--text-lg)",
+                fontWeight: 600,
+                letterSpacing: "-0.01em",
+                color: "var(--text-primary)",
+                margin: 0,
+              }}
+            >
+              {isEditing ? "עריכת משימה" : "משימה חדשה"}
+            </h2>
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="סגירה"
+              style={{
+                width: 44,
+                height: 44,
+                flexShrink: 0,
+                borderRadius: "var(--r-full)",
+                background: "var(--bg)",
+                border: "1px solid var(--border)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                cursor: "pointer",
+                color: "var(--text-muted)",
+              }}
+            >
+              <X size={18} strokeWidth={2} />
+            </button>
+          </div>
         </div>
 
-        <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "var(--sp-3)" }}>
-          {/* Title */}
+        {/* The form fills the remaining height and is itself a flex column so the
+            body scrolls while the footer stays pinned. */}
+        <form
+          onSubmit={handleSubmit}
+          style={{
+            flex: "1 1 auto",
+            minHeight: 0,
+            display: "flex",
+            flexDirection: "column",
+            overflow: "hidden",
+          }}
+        >
+          {/* BODY zone — flex:1 1 auto; the only scroll container. */}
+          <div
+            style={{
+              flex: "1 1 auto",
+              minHeight: 0,
+              overflowY: "auto",
+              overscrollBehavior: "contain",
+              WebkitOverflowScrolling: "touch",
+              display: "flex",
+              flexDirection: "column",
+              gap: "var(--sp-3)",
+              padding: "var(--sp-5)",
+            }}
+          >
+            {/* Title */}
           <input
             autoFocus
             placeholder="שם המשימה"
@@ -317,8 +397,7 @@ export default function AddTaskModal({
               <button
                 type="button"
                 aria-label="בחר תאריך אחר"
-                aria-expanded={showPicker}
-                onClick={() => setShowPicker((s) => !s)}
+                onClick={openDatePicker}
                 style={{
                   display: "inline-flex",
                   alignItems: "center",
@@ -326,9 +405,9 @@ export default function AddTaskModal({
                   width: 44,
                   height: 44,
                   borderRadius: "var(--r-full)",
-                  border: `1px solid ${showPicker ? "var(--jmh-blue-30)" : "var(--border-strong)"}`,
-                  background: showPicker ? "var(--jmh-blue-05)" : "var(--surface)",
-                  color: showPicker ? "var(--jmh-blue)" : "var(--text-secondary)",
+                  border: "1px solid var(--border-strong)",
+                  background: "var(--surface)",
+                  color: "var(--text-secondary)",
                   cursor: "pointer",
                   flexShrink: 0,
                   transition: `all var(--dur-fast) var(--ease-out)`,
@@ -337,22 +416,25 @@ export default function AddTaskModal({
                 <Calendar size={18} strokeWidth={2} />
               </button>
             </div>
-            {showPicker && (
-              <input
-                type="date"
-                value={dueDate}
-                onChange={(e) => setDueDate(e.target.value)}
-                style={inputStyle}
-                onFocus={(e) => {
-                  e.target.style.borderColor = "var(--jmh-blue-60)";
-                  e.target.style.boxShadow = "0 0 0 3px oklch(0.54 0.14 240 / 0.12)";
-                }}
-                onBlur={(e) => {
-                  e.target.style.borderColor = "var(--border-strong)";
-                  e.target.style.boxShadow = "none";
-                }}
-              />
-            )}
+            {/* Single native date input, visually hidden but still operable so
+                showPicker() (or the focus+click fallback) opens the OS calendar.
+                Never display:none / visibility:hidden — both disable the picker.
+                Its onChange drives the same dueDate the chips reflect. */}
+            <input
+              ref={dateInputRef}
+              type="date"
+              value={dueDate}
+              onChange={(e) => setDueDate(e.target.value)}
+              aria-label="תאריך יעד"
+              tabIndex={-1}
+              style={{
+                position: "absolute",
+                opacity: 0,
+                width: 1,
+                height: 1,
+                pointerEvents: "none",
+              }}
+            />
           </div>
 
           {/* Assignee */}
@@ -597,30 +679,43 @@ export default function AddTaskModal({
             )}
           </div>
 
-          {/* Submit */}
-          <button
-            type="submit"
-            disabled={!canSubmit}
+          </div>
+
+          {/* FOOTER zone — flex:0 0 auto; pinned. padding-bottom clears the iOS
+              home indicator via the safe-area inset. */}
+          <div
             style={{
-              marginTop: "var(--sp-2)",
-              width: "100%",
-              padding: "14px var(--sp-6)",
-              background: canSubmit ? "var(--jmh-blue)" : "var(--jmh-blue-30)",
-              color: "white",
-              borderRadius: "var(--r-full)",
-              border: "none",
-              fontFamily: "var(--font)",
-              fontWeight: 600,
-              fontSize: "var(--text-base)",
-              cursor: canSubmit ? "pointer" : "not-allowed",
-              boxShadow: canSubmit ? "var(--shadow-sm)" : "none",
-              transition: `background var(--dur-fast) var(--ease-out)`,
+              flex: "0 0 auto",
+              background: "var(--surface)",
+              borderTop: "1px solid var(--border)",
+              padding: "var(--sp-4) var(--sp-5)",
+              paddingBottom: "max(16px, env(safe-area-inset-bottom))",
             }}
           >
-            {submitting ? "שומר..." : isEditing ? "שמור שינויים" : "הוסף משימה"}
-          </button>
+            <button
+              type="submit"
+              disabled={!canSubmit}
+              style={{
+                width: "100%",
+                padding: "14px var(--sp-6)",
+                background: canSubmit ? "var(--jmh-blue)" : "var(--jmh-blue-30)",
+                color: "white",
+                borderRadius: "var(--r-full)",
+                border: "none",
+                fontFamily: "var(--font)",
+                fontWeight: 600,
+                fontSize: "var(--text-base)",
+                cursor: canSubmit ? "pointer" : "not-allowed",
+                boxShadow: canSubmit ? "var(--shadow-sm)" : "none",
+                transition: `background var(--dur-fast) var(--ease-out)`,
+              }}
+            >
+              {submitting ? "שומר..." : isEditing ? "שמור שינויים" : "הוסף משימה"}
+            </button>
+          </div>
         </form>
       </div>
+      <style>{SHEET_CSS}</style>
     </>
   );
 }

@@ -47,9 +47,8 @@ export default function TaskRow({ task, adults, date, status, isRecurring, onTog
     ? "var(--jmh-gold)"
     : "var(--border-strong)";
 
-  // The single derived "who owns this task" concept: shared → both adults, else
-  // the assignee, else the responsibility owner. One field, rendered from one
-  // User icon — no more separate owner + "מבצע" assignee.
+  // The single derived "who is on this task" concept: shared → both adults, else
+  // the assignee, else nobody. One field, rendered from one User icon.
   const people = getTaskPeople(task, adults);
   const peopleNames = people.map((p) => p.name).join(" · ");
   const child = task.child ?? null;

@@ -227,6 +227,10 @@ export default function ShoppingClient({ initialItems }: Props) {
           value={quantity}
           onChange={(e) => setQuantity(e.target.value)}
           placeholder="כמות"
+          // Digits keypad on mobile without switching to type="number" — quantity
+          // stays a nullable free-text string (no spinners, no RTL misbehaviour).
+          inputMode="numeric"
+          pattern="[0-9]*"
           style={{ ...inputStyle, width: 80, flexShrink: 0 }}
           onFocus={focusRing}
           onBlur={blurRing}
