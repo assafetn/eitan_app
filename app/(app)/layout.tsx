@@ -29,7 +29,10 @@ export default async function AppLayout({
         background: "var(--bg)",
         display: "flex",
         flexDirection: "column",
-        paddingBottom: 96, // space for bottom nav
+        // viewport-fit:cover puts content under the notch/home indicator, so pad
+        // by the safe-area insets. Bottom also reserves room for the floating nav.
+        paddingTop: "env(safe-area-inset-top)",
+        paddingBottom: "calc(96px + env(safe-area-inset-bottom))",
       }}
     >
       <RefreshOnFocus />

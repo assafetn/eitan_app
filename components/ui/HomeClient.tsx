@@ -218,6 +218,7 @@ export default function HomeClient({ appName, firstName, initialTasks, initialOv
   return (
     <div
       style={{
+        width: "100%",
         maxWidth: 600,
         margin: "0 auto",
         padding: "var(--sp-6) var(--sp-4)",

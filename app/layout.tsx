@@ -10,8 +10,15 @@ export const metadata: Metadata = {
 };
 
 // theme_color for the browser UI (matches the manifest / --jmh-blue token).
+// width/initialScale pin the layout viewport to the device so iOS can't render
+// a wide 980px page; viewportFit:cover makes the app fill edge-to-edge under the
+// notch and exposes the safe-area-inset-* envs. Zoom is deliberately NOT locked
+// (no maximumScale / userScalable) so pinch-to-zoom stays available.
 export const viewport: Viewport = {
   themeColor: "#0076b7",
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
 };
 
 export default function RootLayout({

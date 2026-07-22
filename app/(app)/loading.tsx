@@ -73,6 +73,7 @@ export default function AppLoading() {
     <div
       aria-hidden="true"
       style={{
+        width: "100%",
         maxWidth: 600,
         margin: "0 auto",
         padding: "var(--sp-6) var(--sp-4)",

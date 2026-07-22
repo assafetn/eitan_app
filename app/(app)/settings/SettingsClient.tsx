@@ -130,7 +130,7 @@ export default function SettingsClient({ initialResponsibilities, initialLabels,
   }
 
   return (
-    <div style={{ maxWidth: 600, margin: "0 auto", padding: "var(--sp-6) var(--sp-4)", paddingTop: "var(--sp-8)" }}>
+    <div style={{ width: "100%", maxWidth: 600, margin: "0 auto", padding: "var(--sp-6) var(--sp-4)", paddingTop: "var(--sp-8)" }}>
       {/* Header */}
       <div style={{ display: "flex", alignItems: "center", gap: "var(--sp-3)", marginBottom: "var(--sp-6)" }}>
         <Link

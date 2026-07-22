@@ -57,6 +57,7 @@ export default async function ChildTasksPage({
       {/* Back to family overview */}
       <div
         style={{
+          width: "100%",
           maxWidth: 600,
           margin: "0 auto",
           padding: "var(--sp-6) var(--sp-4) 0",

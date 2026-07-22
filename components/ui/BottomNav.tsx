@@ -60,7 +60,9 @@ export default function BottomNav() {
     <nav
       style={{
         position: "fixed",
-        bottom: 14,
+        // Float above the home indicator: at least 14px, more on devices whose
+        // safe-area inset is larger (viewport-fit:cover exposes it).
+        bottom: "max(14px, env(safe-area-inset-bottom))",
         insetInlineStart: 14,
         insetInlineEnd: 14,
         background: "var(--surface)",

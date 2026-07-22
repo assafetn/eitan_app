@@ -78,8 +78,20 @@
   --dur-slow: 400ms;
 }
 
-* {
+*,
+*::before,
+*::after {
   box-sizing: border-box;
+}
+
+/* Global horizontal-overflow guard (safety net). `overflow-x: clip` contains any
+   stray wide child WITHOUT creating a scroll container (unlike `hidden`, which
+   would break position: sticky). text-size-adjust stops iOS from inflating text
+   and reflowing the layout wider than the screen. */
+html,
+body {
+  max-width: 100%;
+  overflow-x: clip;
 }
 
 html {
@@ -87,6 +99,8 @@ html {
   color: var(--text-primary);
   font-family: var(--font);
   -webkit-font-smoothing: antialiased;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
 }
 
 body {
