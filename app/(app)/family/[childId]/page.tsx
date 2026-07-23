@@ -15,29 +15,38 @@ export default async function ChildTasksPage({
   const { childId } = await params;
   const supabase = await createClient();
 
-  const [{ data: child }, { data: members }, { data: children }, { data: responsibilities }, { data: labels }] =
-    await Promise.all([
-      supabase.from("family_members").select("*").eq("id", childId).eq("type", "child").single(),
-      supabase.from("family_members").select("*").eq("type", "adult").order("name"),
-      supabase.from("family_members").select("*").eq("type", "child").order("created_at", { ascending: true }),
-      supabase
-        .from("responsibilities")
-        .select("*, owner:family_members!responsibilities_owner_id_fkey(*)")
-        .order("created_at", { ascending: true }),
-      supabase.from("labels").select("*").order("created_at", { ascending: true }),
-    ]);
+  // The child's tasks depend only on childId (not on the other lookups), so they
+  // join the same batch — one round-trip instead of two. Only the overrides
+  // query below genuinely depends on the fetched task ids. responsibility.owner
+  // is not joined (unused by the task list/calendar).
+  const [
+    { data: child },
+    { data: members },
+    { data: children },
+    { data: responsibilities },
+    { data: labels },
+    { data: tasks },
+  ] = await Promise.all([
+    supabase.from("family_members").select("*").eq("id", childId).eq("type", "child").single(),
+    supabase.from("family_members").select("*").eq("type", "adult").order("name"),
+    supabase.from("family_members").select("*").eq("type", "child").order("created_at", { ascending: true }),
+    supabase
+      .from("responsibilities")
+      .select("*, owner:family_members!responsibilities_owner_id_fkey(*)")
+      .order("created_at", { ascending: true }),
+    supabase.from("labels").select("*").order("created_at", { ascending: true }),
+    supabase
+      .from("tasks")
+      .select(
+        "*, assignee:family_members!tasks_assignee_id_fkey(*), child:family_members!tasks_child_id_fkey(*), responsibility:responsibilities!tasks_responsibility_id_fkey(*), labels(*)"
+      )
+      .is("recurrence_parent_id", null)
+      .eq("child_id", childId)
+      .order("due_date", { ascending: true, nullsFirst: false })
+      .order("created_at", { ascending: false }),
+  ]);
 
   if (!child) notFound();
-
-  const { data: tasks } = await supabase
-    .from("tasks")
-    .select(
-      "*, assignee:family_members!tasks_assignee_id_fkey(*), child:family_members!tasks_child_id_fkey(*), responsibility:responsibilities!tasks_responsibility_id_fkey(*, owner:family_members!responsibilities_owner_id_fkey(*)), labels(*)"
-    )
-    .is("recurrence_parent_id", null)
-    .eq("child_id", childId)
-    .order("due_date", { ascending: true, nullsFirst: false })
-    .order("created_at", { ascending: false });
 
   const parentIds = ((tasks as Task[]) ?? [])
     .filter((t) => t.recurrence_rule)

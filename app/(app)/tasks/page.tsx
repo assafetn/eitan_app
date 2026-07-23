@@ -19,10 +19,13 @@ export default async function TasksPage() {
     { data: responsibilities },
     { data: labels },
   ] = await Promise.all([
+    // responsibility.owner is intentionally not joined — nothing on the task
+    // list/calendar reads it (getTaskPeople resolves people from assignee/
+    // is_shared; the badge shows only the responsibility name + colour).
     supabase
       .from("tasks")
       .select(
-        "*, assignee:family_members!tasks_assignee_id_fkey(*), child:family_members!tasks_child_id_fkey(*), responsibility:responsibilities!tasks_responsibility_id_fkey(*, owner:family_members!responsibilities_owner_id_fkey(*)), labels(*)"
+        "*, assignee:family_members!tasks_assignee_id_fkey(*), child:family_members!tasks_child_id_fkey(*), responsibility:responsibilities!tasks_responsibility_id_fkey(*), labels(*)"
       )
       .is("recurrence_parent_id", null)
       .order("due_date", { ascending: true, nullsFirst: false })
