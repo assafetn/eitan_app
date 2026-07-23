@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import type { ShoppingItem } from "@/lib/types";
 import { getShoppingEmoji } from "@/lib/shoppingEmoji";
+import { useCoalescedRefresh } from "@/lib/useCoalescedRefresh";
 import Toast from "@/components/ui/Toast";
 import { Check, Plus, Trash2 } from "lucide-react";
 
@@ -67,6 +68,8 @@ export default function ShoppingClient({ initialItems }: Props) {
   const [adding, setAdding] = useState(false);
   // Transient failure toast for reverted optimistic updates.
   const [toast, setToast] = useState<string | null>(null);
+  // Coalesced re-fetch so the nav's shopping badge stays in sync after mutations.
+  const scheduleRefresh = useCoalescedRefresh();
 
   const sorted = useMemo(() => sortItems(items), [items]);
   const checkedCount = items.filter((i) => i.is_checked).length;
@@ -106,6 +109,7 @@ export default function ShoppingClient({ initialItems }: Props) {
       setItems((prev) => [...prev, data as ShoppingItem]);
       setName("");
       setQuantity("");
+      scheduleRefresh();
     }
     setAdding(false);
   }
@@ -119,6 +123,8 @@ export default function ShoppingClient({ initialItems }: Props) {
       // revert optimistic toggle
       setItems((prev) => prev.map((i) => (i.id === item.id ? { ...i, is_checked: item.is_checked } : i)));
       setToast(SAVE_FAILED);
+    } else {
+      scheduleRefresh();
     }
   }
 
@@ -130,6 +136,8 @@ export default function ShoppingClient({ initialItems }: Props) {
       // revert optimistic delete (sortItems re-orders on render, so order here doesn't matter)
       setItems((prev) => [...prev, item]);
       setToast(SAVE_FAILED);
+    } else {
+      scheduleRefresh();
     }
   }
 
@@ -144,6 +152,8 @@ export default function ShoppingClient({ initialItems }: Props) {
       // revert optimistic clear
       setItems((prev) => [...prev, ...removed]);
       setToast(SAVE_FAILED);
+    } else {
+      scheduleRefresh();
     }
   }
 

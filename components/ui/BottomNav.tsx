@@ -42,8 +42,18 @@ const tabs = [
 // NOTE: משפחה is intentionally not a nav tab — the /family route still exists and
 // is reached from Settings (see SettingsClient). Three tabs, evenly distributed.
 
-export default function BottomNav() {
+export default function BottomNav({
+  tasksBadge,
+  shoppingBadge,
+}: {
+  // Streamed server-rendered badge nodes (each Suspense-wrapped by the layout).
+  // Passing them in as props keeps the nav painting immediately — only the badge
+  // slots suspend.
+  tasksBadge?: React.ReactNode;
+  shoppingBadge?: React.ReactNode;
+} = {}) {
   const pathname = usePathname();
+  const badgeFor: Record<string, React.ReactNode> = { tasks: tasksBadge, shopping: shoppingBadge };
 
   return (
     <nav
@@ -66,14 +76,19 @@ export default function BottomNav() {
     >
       {tabs.map((tab) => {
         const isActive = pathname.startsWith(tab.href);
+        const badge = badgeFor[tab.id];
         return (
           <Link
             key={tab.id}
             href={tab.href}
             style={{
               flex: 1,
+              minWidth: 0,
               display: "flex",
-              flexDirection: "column",
+              // column-reverse: icon stays visually on top, but the label comes
+              // first in DOM so the streamed badge's screen-reader text (inside
+              // the icon wrapper) is announced AFTER the label — "קניות, 3 פריטים".
+              flexDirection: "column-reverse",
               alignItems: "center",
               gap: 3,
               padding: "8px 0",
@@ -84,7 +99,6 @@ export default function BottomNav() {
               transition: `background var(--dur-fast) var(--ease-out)`,
             }}
           >
-            {tab.icon}
             <span
               style={{
                 fontSize: "var(--text-xs)",
@@ -93,6 +107,12 @@ export default function BottomNav() {
               }}
             >
               {tab.label}
+            </span>
+            {/* Icon wrapper is the badge's positioning context. No overflow set
+                (default visible), so the corner badge is never clipped. */}
+            <span style={{ position: "relative", display: "inline-flex", flexShrink: 0 }}>
+              {tab.icon}
+              {badge}
             </span>
           </Link>
         );

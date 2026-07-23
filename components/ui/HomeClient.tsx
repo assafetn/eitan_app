@@ -15,6 +15,7 @@ import type {
   TaskStatus,
 } from "@/lib/types";
 import { addDaysISO, formatDueDate, resolveOccurrencesInRange, todayISO, type ResolvedOccurrence } from "@/lib/recurrence";
+import { useCoalescedRefresh } from "@/lib/useCoalescedRefresh";
 import TaskRow from "@/components/ui/TaskRow";
 import AddTaskModal from "@/components/ui/AddTaskModal";
 import Toast from "@/components/ui/Toast";
@@ -77,6 +78,7 @@ export default function HomeClient({
   labels: initialLabels,
 }: Props) {
   const router = useRouter();
+  const scheduleRefresh = useCoalescedRefresh();
   const [tasks, setTasks] = useState<Task[]>(initialTasks);
   const [overrides, setOverrides] = useState<OccurrenceOverride[]>(initialOverrides);
   // Transient failure toast for reverted optimistic updates.
@@ -198,6 +200,7 @@ export default function HomeClient({
           updated_at: new Date().toISOString(),
         })
         .eq("id", occ.task.id);
+      scheduleRefresh();
       return;
     }
 
@@ -230,6 +233,7 @@ export default function HomeClient({
         setToast(SAVE_FAILED);
       } else {
         setOverrides((prev) => prev.map((o) => (o.id === tempId ? (data as OccurrenceOverride) : o)));
+        scheduleRefresh();
       }
     } else {
       const ov = overrides.find((o) => o.recurrence_parent_id === parentId && o.due_date === date);
@@ -238,6 +242,7 @@ export default function HomeClient({
       if (!ov.id.startsWith("temp:")) {
         await supabase.from("tasks").delete().eq("id", ov.id);
       }
+      scheduleRefresh();
     }
   }
 

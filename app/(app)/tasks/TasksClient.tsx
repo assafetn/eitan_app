@@ -14,6 +14,7 @@ import type {
 } from "@/lib/types";
 import { addDaysISO, expandOccurrences, isCompletedOccurrenceVisible, todayISO } from "@/lib/recurrence";
 import { getTaskPeople } from "@/lib/taskPeople";
+import { useCoalescedRefresh } from "@/lib/useCoalescedRefresh";
 import TaskRow from "@/components/ui/TaskRow";
 import AddTaskModal from "@/components/ui/AddTaskModal";
 import CalendarView from "@/components/ui/CalendarView";
@@ -91,6 +92,8 @@ export default function TasksClient({
   const [pendingDelete, setPendingDelete] = useState<Occurrence | null>(null);
   // Transient failure toast for reverted optimistic updates.
   const [toast, setToast] = useState<string | null>(null);
+  // Coalesced re-fetch so the nav's tasks badge stays in sync after mutations.
+  const scheduleRefresh = useCoalescedRefresh();
 
   // Filter state — local UI only, resets on reload (7.3). The two cuts combine.
   const [respFilter, setRespFilter] = useState<RespFilter>("all");
@@ -251,6 +254,7 @@ export default function TasksClient({
           updated_at: new Date().toISOString(),
         })
         .eq("id", occ.task.id);
+      scheduleRefresh();
       return;
     }
 
@@ -290,6 +294,7 @@ export default function TasksClient({
         setOverrides((prev) =>
           prev.map((o) => (o.id === tempId ? (data as OccurrenceOverride) : o))
         );
+        scheduleRefresh();
       }
     } else {
       // Un-complete → delete the override row.
@@ -301,6 +306,7 @@ export default function TasksClient({
       if (!ov.id.startsWith("temp:")) {
         await supabase.from("tasks").delete().eq("id", ov.id);
       }
+      scheduleRefresh();
     }
   }
 
@@ -339,6 +345,8 @@ export default function TasksClient({
       if (removedTask) setTasks((prev) => [removedTask, ...prev]);
       if (removedOverrides.length > 0) setOverrides((prev) => [...prev, ...removedOverrides]);
       setToast(DELETE_FAILED);
+    } else {
+      scheduleRefresh();
     }
   }
 
@@ -421,6 +429,7 @@ export default function TasksClient({
       const responsibility = responsibilities.find((r) => r.id === data.responsibility_id) ?? null;
       const taskLabels = labels.filter((l) => data.label_ids.includes(l.id));
       setTasks((prev) => [{ ...(newTask as Task), responsibility, labels: taskLabels }, ...prev]);
+      scheduleRefresh();
     }
     setShowAdd(false);
   }
