@@ -38,20 +38,9 @@ const tabs = [
       </svg>
     ),
   },
-  {
-    id: "family",
-    href: "/family",
-    label: "משפחה",
-    icon: (
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
-        <circle cx="9" cy="7" r="4"/>
-        <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
-        <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
-      </svg>
-    ),
-  },
 ] as const;
+// NOTE: משפחה is intentionally not a nav tab — the /family route still exists and
+// is reached from Settings (see SettingsClient). Three tabs, evenly distributed.
 
 export default function BottomNav() {
   const pathname = usePathname();
@@ -70,6 +59,7 @@ export default function BottomNav() {
         borderRadius: "var(--r-xl)",
         padding: 6,
         display: "flex",
+        gap: "var(--sp-2)", // >=8px between the three tabs
         boxShadow: "var(--shadow-lg)",
         zIndex: 50,
       }}

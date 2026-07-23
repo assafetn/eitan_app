@@ -5,7 +5,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { COLOR_TOKENS, type ColorToken } from "@/lib/constants";
 import type { FamilyMember, Label, Responsibility } from "@/lib/types";
-import { ArrowRight, Check, Pencil, Plus, Trash2, X } from "lucide-react";
+import { ArrowRight, Check, ChevronLeft, Pencil, Plus, Trash2, Users, X } from "lucide-react";
 
 interface Props {
   initialResponsibilities: Responsibility[];
@@ -164,6 +164,58 @@ export default function SettingsClient({ initialResponsibilities, initialLabels,
           הגדרות
         </h1>
       </div>
+
+      {/* ── Section: family (moved off the bottom nav) ── */}
+      <Section title="משפחה" subtitle="ניהול הילדים והמשימות המשויכות אליהם.">
+        <Link
+          href="/family"
+          style={{
+            ...cardStyle,
+            display: "flex",
+            alignItems: "center",
+            gap: "var(--sp-3)",
+            padding: "12px 14px",
+            minHeight: 44,
+            textDecoration: "none",
+          }}
+        >
+          <span
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              width: 36,
+              height: 36,
+              borderRadius: "var(--r-full)",
+              background: "var(--jmh-blue-05)",
+              color: "var(--jmh-blue)",
+              flexShrink: 0,
+            }}
+          >
+            <Users size={18} strokeWidth={2} />
+          </span>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <p
+              style={{
+                fontFamily: "var(--font)",
+                fontSize: "var(--text-base)",
+                fontWeight: 500,
+                color: "var(--text-primary)",
+                margin: 0,
+                whiteSpace: "nowrap",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+              }}
+            >
+              ילדים ומשימות
+            </p>
+            <p style={{ fontFamily: "var(--font)", fontSize: "var(--text-sm)", color: "var(--text-muted)", margin: "2px 0 0" }}>
+              צפייה בכל ילד והמשימות הפתוחות שלו
+            </p>
+          </div>
+          <ChevronLeft size={18} strokeWidth={2} style={{ color: "var(--text-muted)", flexShrink: 0 }} />
+        </Link>
+      </Section>
 
       {/* ── Section A: responsibilities ── */}
       <Section title="אחריות" subtitle="תחומי אחריות של ההורים. כל משימה יכולה להשתייך לאחריות אחת.">

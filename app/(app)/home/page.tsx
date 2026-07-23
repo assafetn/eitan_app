@@ -1,5 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
-import type { FamilyMember, OccurrenceOverride, Task } from "@/lib/types";
+import type { FamilyMember, Label, OccurrenceOverride, Responsibility, Task } from "@/lib/types";
 import { APP_NAME } from "@/lib/constants";
 import HomeClient from "@/components/ui/HomeClient";
 
@@ -8,12 +8,21 @@ export const dynamic = "force-dynamic";
 export default async function HomePage() {
   const supabase = await createClient();
 
-  // All four run concurrently — getUser no longer gates the data queries. The
+  // All queries run concurrently — getUser no longer gates the data queries. The
   // greeting name is derived from the already-fetched adults list (the logged-in
   // user is always an adult member), so there's no separate member query and no
-  // extra round-trip. Note: responsibility.owner is intentionally NOT joined here
-  // — nothing on this screen reads it (getTaskPeople uses assignee/is_shared).
-  const [{ data: { user } }, { data: tasks }, { data: overrides }, { data: adults }] = await Promise.all([
+  // extra round-trip. responsibilities/labels/children feed the (reused)
+  // AddTaskModal opened from the "הוספת משימה" CTA. Note: responsibility.owner is
+  // intentionally NOT joined on tasks — nothing on this screen reads it.
+  const [
+    { data: { user } },
+    { data: tasks },
+    { data: overrides },
+    { data: adults },
+    { data: children },
+    { data: responsibilities },
+    { data: labels },
+  ] = await Promise.all([
     supabase.auth.getUser(),
     // All primary rows (singles + series parents) with joins — fed to the
     // shared occurrence engine that builds today's / upcoming tasks.
@@ -28,6 +37,12 @@ export default async function HomePage() {
       .select("id, recurrence_parent_id, due_date, status, completed_at")
       .not("recurrence_parent_id", "is", null),
     supabase.from("family_members").select("*").eq("type", "adult").order("name"),
+    supabase.from("family_members").select("*").eq("type", "child").order("created_at", { ascending: true }),
+    supabase
+      .from("responsibilities")
+      .select("*, owner:family_members!responsibilities_owner_id_fkey(*)")
+      .order("created_at", { ascending: true }),
+    supabase.from("labels").select("*").order("created_at", { ascending: true }),
   ]);
 
   const adultList = (adults as FamilyMember[]) ?? [];
@@ -40,6 +55,9 @@ export default async function HomePage() {
       initialTasks={(tasks as Task[]) ?? []}
       initialOverrides={(overrides as OccurrenceOverride[]) ?? []}
       adults={adultList}
+      childMembers={(children as FamilyMember[]) ?? []}
+      responsibilities={(responsibilities as Responsibility[]) ?? []}
+      labels={(labels as Label[]) ?? []}
     />
   );
 }

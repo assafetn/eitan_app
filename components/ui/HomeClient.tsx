@@ -4,11 +4,21 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import type { FamilyMember, OccurrenceOverride, Task, TaskStatus } from "@/lib/types";
+import type {
+  FamilyMember,
+  Label,
+  OccurrenceOverride,
+  RecurrenceRule,
+  Responsibility,
+  Task,
+  TaskPriority,
+  TaskStatus,
+} from "@/lib/types";
 import { addDaysISO, formatDueDate, resolveOccurrencesInRange, todayISO, type ResolvedOccurrence } from "@/lib/recurrence";
 import TaskRow from "@/components/ui/TaskRow";
+import AddTaskModal from "@/components/ui/AddTaskModal";
 import Toast from "@/components/ui/Toast";
-import { CircleCheck, Settings } from "lucide-react";
+import { CircleCheck, Plus, Settings } from "lucide-react";
 
 const SAVE_FAILED = "השמירה נכשלה, נסו שוב";
 
@@ -19,6 +29,10 @@ interface Props {
   initialOverrides: OccurrenceOverride[];
   /** Household adults — threaded to each TaskRow's person field. */
   adults: FamilyMember[];
+  /** The following three feed the (reused) AddTaskModal opened from this screen. */
+  childMembers: FamilyMember[];
+  responsibilities: Responsibility[];
+  labels: Label[];
 }
 
 // How far ahead to look for the "next upcoming" fallback.
@@ -52,12 +66,26 @@ function summarySentence(todayCount: number, overdueCount: number): string {
   return s;
 }
 
-export default function HomeClient({ appName, firstName, initialTasks, initialOverrides, adults }: Props) {
+export default function HomeClient({
+  appName,
+  firstName,
+  initialTasks,
+  initialOverrides,
+  adults,
+  childMembers,
+  responsibilities: initialResponsibilities,
+  labels: initialLabels,
+}: Props) {
   const router = useRouter();
   const [tasks, setTasks] = useState<Task[]>(initialTasks);
   const [overrides, setOverrides] = useState<OccurrenceOverride[]>(initialOverrides);
   // Transient failure toast for reverted optimistic updates.
   const [toast, setToast] = useState<string | null>(null);
+  // Add-task sheet + the lists it needs. Held in state so an inline-created
+  // responsibility/label appears immediately in the open sheet.
+  const [showAdd, setShowAdd] = useState(false);
+  const [responsibilities, setResponsibilities] = useState<Responsibility[]>(initialResponsibilities);
+  const [labels, setLabels] = useState<Label[]>(initialLabels);
 
   const today = todayISO();
 
@@ -211,6 +239,79 @@ export default function HomeClient({ appName, firstName, initialTasks, initialOv
         await supabase.from("tasks").delete().eq("id", ov.id);
       }
     }
+  }
+
+  // ── Create a task from the home CTA, reusing the shared AddTaskModal ──
+  // Same insert shape / save behavior as the tasks page. On success we refresh
+  // the server component so the dashboard reflects the new task; on failure we
+  // keep the sheet open and surface the existing Toast (no optimistic state here
+  // because the summary/upcoming derivations are recomputed server-side).
+  async function addTask(data: {
+    title: string;
+    notes: string;
+    due_date: string;
+    assignee_id: string | null;
+    child_id: string | null;
+    responsibility_id: string | null;
+    label_ids: string[];
+    recurrence_rule: RecurrenceRule | null;
+    priority: TaskPriority;
+    is_shared: boolean;
+  }) {
+    const supabase = createClient();
+    const memberId = (await getMyMemberId(supabase)) ?? adults[0]?.id;
+    const { data: newTask, error } = await supabase
+      .from("tasks")
+      .insert({
+        title: data.title,
+        notes: data.notes || null,
+        due_date: data.due_date || null,
+        assignee_id: data.assignee_id || null,
+        child_id: data.child_id || null,
+        responsibility_id: data.responsibility_id || null,
+        status: "open",
+        priority: data.priority,
+        is_shared: data.is_shared,
+        recurrence_rule: data.recurrence_rule,
+        created_by: memberId,
+      })
+      .select("id")
+      .single();
+
+    if (error || !newTask) {
+      setToast(SAVE_FAILED);
+      return; // keep the sheet open so the user can retry
+    }
+    if (data.label_ids.length > 0) {
+      await supabase
+        .from("task_labels")
+        .insert(data.label_ids.map((label_id) => ({ task_id: (newTask as { id: string }).id, label_id })));
+    }
+    setShowAdd(false);
+    router.refresh();
+  }
+
+  // Inline create-new from the add-task sheet (mirrors the tasks page).
+  async function createResponsibility(name: string, ownerId: string): Promise<Responsibility | null> {
+    const supabase = createClient();
+    const { data, error } = await supabase
+      .from("responsibilities")
+      .insert({ name, owner_id: ownerId, color: null })
+      .select("*, owner:family_members!responsibilities_owner_id_fkey(*)")
+      .single();
+    if (error || !data) return null;
+    const resp = data as Responsibility;
+    setResponsibilities((prev) => [...prev, resp]);
+    return resp;
+  }
+
+  async function createLabel(name: string): Promise<Label | null> {
+    const supabase = createClient();
+    const { data, error } = await supabase.from("labels").insert({ name, color: null }).select("*").single();
+    if (error || !data) return null;
+    const label = data as Label;
+    setLabels((prev) => [...prev, label]);
+    return label;
   }
 
   const sectionTitle = mode === "upcoming" ? "הקרוב" : "להיום";
@@ -393,6 +494,37 @@ export default function HomeClient({ appName, firstName, initialTasks, initialOv
         </div>
       </div>
 
+      {/* Primary CTA — opens the shared AddTaskModal. Full-width (not a FAB, which
+          would collide with the fixed bottom nav); sits under the summary, above
+          the list. */}
+      <button
+        type="button"
+        onClick={() => setShowAdd(true)}
+        style={{
+          width: "100%",
+          minHeight: 44,
+          padding: "12px var(--sp-6)",
+          marginBottom: "var(--sp-6)",
+          display: "inline-flex",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: "var(--sp-1)",
+          background: "var(--jmh-blue)",
+          color: "white",
+          border: "none",
+          borderRadius: "var(--r-md)",
+          fontFamily: "var(--font)",
+          fontWeight: 600,
+          fontSize: "var(--text-base)",
+          cursor: "pointer",
+          boxShadow: "var(--shadow-sm)",
+          transition: `background var(--dur-fast) var(--ease-out)`,
+        }}
+      >
+        <Plus size={18} strokeWidth={2} />
+        הוספת משימה
+      </button>
+
       {/* Tasks — today, or the next upcoming day if today is clear */}
       {mode === "empty" ? (
         <div style={{ textAlign: "center", padding: "var(--sp-12) var(--sp-6)", color: "var(--text-muted)" }}>
@@ -438,6 +570,19 @@ export default function HomeClient({ appName, firstName, initialTasks, initialOv
             ))}
           </div>
         </>
+      )}
+
+      {showAdd && (
+        <AddTaskModal
+          members={adults}
+          childMembers={childMembers}
+          responsibilities={responsibilities}
+          labels={labels}
+          onClose={() => setShowAdd(false)}
+          onAdd={addTask}
+          onCreateResponsibility={createResponsibility}
+          onCreateLabel={createLabel}
+        />
       )}
 
       <Toast message={toast} onDismiss={() => setToast(null)} />
