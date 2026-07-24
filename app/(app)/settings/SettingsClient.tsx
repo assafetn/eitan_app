@@ -5,6 +5,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { COLOR_TOKENS, type ColorToken } from "@/lib/constants";
 import type { FamilyMember, Label, Responsibility } from "@/lib/types";
+import InstallHint from "@/components/ui/InstallHint";
 import { ArrowRight, Check, ChevronLeft, Pencil, Plus, Trash2, Users, X } from "lucide-react";
 
 interface Props {
@@ -164,6 +165,9 @@ export default function SettingsClient({ initialResponsibilities, initialLabels,
           הגדרות
         </h1>
       </div>
+
+      {/* iOS-only, self-hiding once installed or dismissed. */}
+      <InstallHint />
 
       {/* ── Section: family (moved off the bottom nav) ── */}
       <Section title="משפחה" subtitle="ניהול הילדים והמשימות המשויכות אליהם.">
