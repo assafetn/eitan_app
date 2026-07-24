@@ -255,6 +255,7 @@ export default function HomeClient({
     title: string;
     notes: string;
     due_date: string;
+    due_time: string | null;
     assignee_id: string | null;
     child_id: string | null;
     responsibility_id: string | null;
@@ -271,6 +272,7 @@ export default function HomeClient({
         title: data.title,
         notes: data.notes || null,
         due_date: data.due_date || null,
+        due_time: data.due_time,
         assignee_id: data.assignee_id || null,
         child_id: data.child_id || null,
         responsibility_id: data.responsibility_id || null,

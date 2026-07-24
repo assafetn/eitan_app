@@ -19,6 +19,8 @@ interface Props {
     title: string;
     notes: string;
     due_date: string;
+    /** "HH:MM", or null when unset. Never "". */
+    due_time: string | null;
     assignee_id: string | null;
     child_id: string | null;
     responsibility_id: string | null;
@@ -27,12 +29,13 @@ interface Props {
     priority: TaskPriority;
     is_shared: boolean;
   }) => Promise<void>;
-  /** Save edits to an existing task. Same payload shape as onAdd (due_time is
-   *  preserved by the parent, not edited here). */
+  /** Save edits to an existing task. Same payload shape as onAdd. */
   onSave?: (data: {
     title: string;
     notes: string;
     due_date: string;
+    /** "HH:MM", or null when unset. Never "". */
+    due_time: string | null;
     assignee_id: string | null;
     child_id: string | null;
     responsibility_id: string | null;
@@ -121,6 +124,20 @@ export default function AddTaskModal({
   // The single (visually hidden) native date input; the calendar icon opens it
   // directly via showPicker(), so there's no intermediate reveal step.
   const dateInputRef = useRef<HTMLInputElement>(null);
+  // Optional due time. "" = unset. Postgres `time` comes back as "HH:MM:SS";
+  // <input type="time"> speaks "HH:MM", so we normalise to "HH:MM" on the way in
+  // and send "HH:MM" (or null) on the way out.
+  const [dueTime, setDueTime] = useState(editingTask?.due_time?.slice(0, 5) ?? "");
+  const timeInputRef = useRef<HTMLInputElement>(null);
+  const timePresets: { label: string; value: string }[] = [
+    { label: "בוקר", value: "08:00" },
+    { label: "צהריים", value: "12:00" },
+    { label: "ערב", value: "18:00" },
+    { label: "לילה", value: "20:00" },
+  ];
+  // A time without a date is meaningless here, so the whole control is disabled
+  // until a date exists (and clearing the date clears the time — see the effect).
+  const timeDisabled = !dueDate;
   const [assigneeId, setAssigneeId] = useState<string | null>(editingTask?.assignee_id ?? null);
   const [childId, setChildId] = useState<string | null>(editingTask?.child_id ?? null);
   const [responsibilityId, setResponsibilityId] = useState<string | null>(
@@ -155,11 +172,16 @@ export default function AddTaskModal({
     };
   }, []);
 
-  // Open the native date picker straight from the icon tap. showPicker() is the
-  // modern path (and may throw without a user gesture); focus()+click() is the
-  // fallback for engines that lack it.
-  function openDatePicker() {
-    const el = dateInputRef.current;
+  // Clearing the date clears the time with it — a bare time has no meaning.
+  useEffect(() => {
+    if (!dueDate && dueTime) setDueTime("");
+  }, [dueDate, dueTime]);
+
+  // Open a native picker straight from a tap. showPicker() is the modern path
+  // (and may throw without a user gesture); focus()+click() is the fallback for
+  // engines that lack it. Shared by the date and time fields.
+  function openNativePicker(ref: React.RefObject<HTMLInputElement | null>) {
+    const el = ref.current;
     if (!el) return;
     const withPicker = el as HTMLInputElement & { showPicker?: () => void };
     if (typeof withPicker.showPicker === "function") {
@@ -213,6 +235,8 @@ export default function AddTaskModal({
       title: title.trim(),
       notes,
       due_date: dueDate,
+      // Only meaningful alongside a date; always null rather than "" when unset.
+      due_time: dueDate && dueTime ? dueTime : null,
       assignee_id: isShared ? null : assigneeId,
       child_id: childId,
       responsibility_id: responsibilityId,
@@ -408,7 +432,7 @@ export default function AddTaskModal({
               <button
                 type="button"
                 aria-label="בחר תאריך אחר"
-                onClick={openDatePicker}
+                onClick={() => openNativePicker(dateInputRef)}
                 style={{
                   display: "inline-flex",
                   alignItems: "center",
@@ -438,6 +462,72 @@ export default function AddTaskModal({
               onChange={(e) => setDueDate(e.target.value)}
               aria-label="תאריך יעד"
               tabIndex={-1}
+              style={{
+                position: "absolute",
+                opacity: 0,
+                width: 1,
+                height: 1,
+                pointerEvents: "none",
+              }}
+            />
+          </div>
+
+          {/* Optional due time. Same chip component/styling as the date row.
+              Disabled (and muted) until a date is chosen. */}
+          <div style={{ display: "flex", flexDirection: "column", gap: "var(--sp-2)", flexShrink: 0 }}>
+            <span style={fieldLabelStyle}>שעה</span>
+            <div style={{ display: "flex", alignItems: "center", gap: "var(--sp-2)", flexWrap: "wrap" }}>
+              {timePresets.map((p) => (
+                <DateChip
+                  key={p.value}
+                  label={
+                    <>
+                      {p.label} <TimeText value={p.value} />
+                    </>
+                  }
+                  active={dueTime === p.value}
+                  disabled={timeDisabled}
+                  onClick={() => setDueTime(p.value)}
+                />
+              ))}
+              {/* Custom time — active whenever the chosen time isn't a preset. */}
+              <DateChip
+                label="שעה אחרת"
+                active={!!dueTime && !timePresets.some((p) => p.value === dueTime)}
+                disabled={timeDisabled}
+                onClick={() => openNativePicker(timeInputRef)}
+              />
+              {/* Clear affordance; reads as selected when no time is set. */}
+              <DateChip
+                label="ללא שעה"
+                active={!dueTime}
+                disabled={timeDisabled}
+                onClick={() => setDueTime("")}
+              />
+            </div>
+
+            {timeDisabled && (
+              <span
+                style={{
+                  fontFamily: "var(--font)",
+                  fontSize: "var(--text-xs)",
+                  color: "var(--text-muted)",
+                  lineHeight: 1.5,
+                }}
+              >
+                בחרו תאריך יעד כדי לקבוע שעה.
+              </span>
+            )}
+
+            {/* Visually hidden native time input, opened via showPicker(). */}
+            <input
+              ref={timeInputRef}
+              type="time"
+              value={dueTime}
+              onChange={(e) => setDueTime(e.target.value)}
+              aria-label="שעת יעד"
+              tabIndex={-1}
+              disabled={timeDisabled}
               style={{
                 position: "absolute",
                 opacity: 0,
@@ -895,12 +985,36 @@ function InlineCreate({
 
 // Quick date preset chip. >=44px touch target (minHeight), pill styling that
 // matches the other selectable chips, with a selected (active) state.
-function DateChip({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
+// A clock time such as "18:00" would otherwise be reordered by the RTL bidi
+// algorithm (rendering as 00:18) when it sits next to Hebrew text. Isolating it
+// as an LTR run keeps the digits in the right order.
+function TimeText({ value }: { value: string }) {
+  return (
+    <span dir="ltr" style={{ unicodeBidi: "isolate" }}>
+      {value}
+    </span>
+  );
+}
+
+// Shared quick-select chip for both the date and time rows. `disabled` renders
+// the muted, non-interactive state used while no due date is set.
+function DateChip({
+  label,
+  active,
+  onClick,
+  disabled = false,
+}: {
+  label: React.ReactNode;
+  active: boolean;
+  onClick: () => void;
+  disabled?: boolean;
+}) {
   return (
     <button
       type="button"
       onClick={onClick}
       aria-pressed={active}
+      disabled={disabled}
       style={{
         display: "inline-flex",
         alignItems: "center",
@@ -908,13 +1022,16 @@ function DateChip({ label, active, onClick }: { label: string; active: boolean; 
         minHeight: 44,
         padding: "0 16px",
         borderRadius: "var(--r-full)",
-        border: `1px solid ${active ? "var(--jmh-blue-30)" : "var(--border-strong)"}`,
-        background: active ? "var(--jmh-blue-05)" : "var(--surface)",
-        color: active ? "var(--jmh-blue)" : "var(--text-secondary)",
+        border: `1px solid ${
+          disabled ? "var(--border)" : active ? "var(--jmh-blue-30)" : "var(--border-strong)"
+        }`,
+        background: disabled ? "var(--bg)" : active ? "var(--jmh-blue-05)" : "var(--surface)",
+        color: disabled ? "var(--text-muted)" : active ? "var(--jmh-blue)" : "var(--text-secondary)",
         fontFamily: "var(--font)",
         fontSize: "var(--text-sm)",
-        fontWeight: active ? 600 : 400,
-        cursor: "pointer",
+        fontWeight: active && !disabled ? 600 : 400,
+        cursor: disabled ? "not-allowed" : "pointer",
+        opacity: disabled ? 0.6 : 1,
         whiteSpace: "nowrap",
         transition: `all var(--dur-fast) var(--ease-out)`,
       }}

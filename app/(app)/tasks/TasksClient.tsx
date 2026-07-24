@@ -383,6 +383,7 @@ export default function TasksClient({
     title: string;
     notes: string;
     due_date: string;
+    due_time: string | null;
     assignee_id: string | null;
     child_id: string | null;
     responsibility_id: string | null;
@@ -395,14 +396,15 @@ export default function TasksClient({
     const memberId = (await getMyMemberId(supabase)) ?? members[0]?.id;
 
     // responsibility_id + labels live on the SERIES PARENT (this row). Recurring
-    // occurrences inherit them, exactly like child_id — override rows never
-    // carry them.
+    // occurrences inherit them, exactly like child_id and due_time — override
+    // rows never carry them.
     const { data: newTask } = await supabase
       .from("tasks")
       .insert({
         title: data.title,
         notes: data.notes || null,
         due_date: data.due_date || null,
+        due_time: data.due_time,
         assignee_id: data.assignee_id || null,
         child_id: data.child_id || null,
         responsibility_id: data.responsibility_id || null,
@@ -435,11 +437,11 @@ export default function TasksClient({
   }
 
   // ── Save edits to an existing task (the series parent for a recurring row) ──
-  // due_time isn't editable in the sheet, so it's left untouched.
   async function updateTask(data: {
     title: string;
     notes: string;
     due_date: string;
+    due_time: string | null;
     assignee_id: string | null;
     child_id: string | null;
     responsibility_id: string | null;
@@ -458,6 +460,7 @@ export default function TasksClient({
         title: data.title,
         notes: data.notes || null,
         due_date: data.due_date || null,
+        due_time: data.due_time,
         assignee_id: data.assignee_id || null,
         child_id: data.child_id || null,
         responsibility_id: data.responsibility_id || null,
@@ -494,6 +497,7 @@ export default function TasksClient({
               title: data.title,
               notes: data.notes || null,
               due_date: data.due_date || null,
+              due_time: data.due_time,
               assignee_id: data.assignee_id || null,
               child_id: data.child_id || null,
               responsibility_id: data.responsibility_id || null,
