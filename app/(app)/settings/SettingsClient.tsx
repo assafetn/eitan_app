@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 import { COLOR_TOKENS, type ColorToken } from "@/lib/constants";
 import type { FamilyMember, Label, Responsibility } from "@/lib/types";
 import InstallHint from "@/components/ui/InstallHint";
+import PushToggle from "@/components/ui/PushToggle";
 import { ArrowRight, Check, ChevronLeft, Pencil, Plus, Trash2, Users, X } from "lucide-react";
 
 interface Props {
@@ -219,6 +220,13 @@ export default function SettingsClient({ initialResponsibilities, initialLabels,
           </div>
           <ChevronLeft size={18} strokeWidth={2} style={{ color: "var(--text-muted)", flexShrink: 0 }} />
         </Link>
+      </Section>
+
+      {/* ── Section: notifications ── */}
+      <Section title="התראות" subtitle="קבלת התראות על משימות במכשיר הזה.">
+        <div style={cardStyle}>
+          <PushToggle />
+        </div>
       </Section>
 
       {/* ── Section A: responsibilities ── */}
