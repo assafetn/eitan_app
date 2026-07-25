@@ -14,9 +14,13 @@ export async function middleware(request: NextRequest) {
 //   icons/ — referenced by the manifest and likewise fetched without credentials.
 //     (The image-extension rule below already covers today's .png files; the
 //     explicit directory entry keeps that true for any future format.)
+//   api/cron/reminders — authenticates with a bearer token and has no session;
+//     without this exclusion pg_net would follow a redirect and receive the
+//     login HTML instead of JSON. /api/push/* is deliberately NOT excluded —
+//     those routes need the session to resolve the subscribing family_member.
 // Auth behaviour for every real app route is unchanged.
 export const config = {
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|manifest\\.webmanifest|sw\\.js|icons/|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+    "/((?!_next/static|_next/image|favicon.ico|manifest\\.webmanifest|sw\\.js|icons/|api/cron/reminders|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
   ],
 };

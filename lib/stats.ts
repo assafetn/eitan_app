@@ -39,6 +39,36 @@ export function openOccurrencesForDay(
 }
 
 /**
+ * Overdue tasks — SINGLES ONLY, deliberately.
+ *
+ * This reproduces the home dashboard's overdue predicate exactly: recurring
+ * series are never back-filled, so an occurrence that was due yesterday is not
+ * "overdue" — it simply isn't in today's window. Widening the expansion range
+ * would change that meaning, so overdue is derived from the raw task rows
+ * instead of from resolveOccurrencesInRange.
+ *
+ * Sorted oldest due_date first.
+ */
+export function overdueSingles(tasks: Task[], todayIso: string): Task[] {
+  return tasks
+    .filter(
+      (t) =>
+        !t.recurrence_rule &&
+        t.recurrence_parent_id == null &&
+        t.status === "open" &&
+        t.due_date != null &&
+        t.due_date < todayIso
+    )
+    .sort((a, b) =>
+      (a.due_date as string) < (b.due_date as string)
+        ? -1
+        : (a.due_date as string) > (b.due_date as string)
+        ? 1
+        : 0
+    );
+}
+
+/**
  * Completed-today count: single tasks whose completed_at is today, plus
  * recurring occurrences whose override row for today is done. No expansion.
  */
