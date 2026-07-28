@@ -7,7 +7,9 @@ import { COLOR_TOKENS, type ColorToken } from "@/lib/constants";
 import type { FamilyMember, Label, Responsibility } from "@/lib/types";
 import InstallHint from "@/components/ui/InstallHint";
 import PushToggle from "@/components/ui/PushToggle";
-import { ArrowRight, Check, ChevronLeft, Pencil, Plus, Trash2, Users, X } from "lucide-react";
+import { useTheme } from "@/components/ui/ThemeProvider";
+import type { Theme } from "@/lib/theme";
+import { ArrowRight, Check, ChevronLeft, Monitor, Moon, Pencil, Plus, Sun, Trash2, Users, X } from "lucide-react";
 
 interface Props {
   initialResponsibilities: Responsibility[];
@@ -170,6 +172,11 @@ export default function SettingsClient({ initialResponsibilities, initialLabels,
       {/* iOS-only, self-hiding once installed or dismissed. */}
       <InstallHint />
 
+      {/* ── Section: appearance ── */}
+      <Section title="מראה" subtitle="בחירת ערכת הצבעים של האפליקציה. ההגדרה נשמרת במכשיר הזה בלבד.">
+        <ThemeToggle />
+      </Section>
+
       {/* ── Section: family (moved off the bottom nav) ── */}
       <Section title="משפחה" subtitle="ניהול הילדים והמשימות המשויכות אליהם.">
         <Link
@@ -328,6 +335,72 @@ function Section({ title, subtitle, children }: { title: string; subtitle: strin
         {subtitle}
       </p>
       {children}
+    </div>
+  );
+}
+
+// Appearance control. Same pill-track visual as the view/owner segmented
+// controls in TasksClient, sized up to a 44px touch target via padding (not a
+// fixed height) so it still grows with the user's text size.
+const THEME_OPTIONS: { value: Theme; label: string; icon: React.ReactNode }[] = [
+  { value: "system", label: "מערכת", icon: <Monitor size={15} strokeWidth={2} /> },
+  { value: "light", label: "בהיר", icon: <Sun size={15} strokeWidth={2} /> },
+  { value: "dark", label: "כהה", icon: <Moon size={15} strokeWidth={2} /> },
+];
+
+function ThemeToggle() {
+  const { theme, setTheme } = useTheme();
+
+  return (
+    <div
+      role="radiogroup"
+      aria-label="ערכת צבעים"
+      style={{
+        display: "flex",
+        width: "100%",
+        padding: 3,
+        gap: 3,
+        background: "var(--bg)",
+        border: "1px solid var(--border)",
+        borderRadius: "var(--r-full)",
+      }}
+    >
+      {THEME_OPTIONS.map((opt) => {
+        const active = theme === opt.value;
+        return (
+          <button
+            key={opt.value}
+            type="button"
+            role="radio"
+            aria-checked={active}
+            onClick={() => setTheme(opt.value)}
+            style={{
+              // equal widths + a weight that never changes → no reflow between
+              // states, so tapping a segment can't shift the other two.
+              flex: 1,
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: "var(--sp-1)",
+              minHeight: 44,
+              padding: "12px var(--sp-2)",
+              borderRadius: "var(--r-full)",
+              border: "none",
+              background: active ? "var(--surface)" : "transparent",
+              color: active ? "var(--jmh-blue)" : "var(--text-muted)",
+              fontFamily: "var(--font)",
+              fontSize: "var(--text-sm)",
+              fontWeight: 600,
+              cursor: "pointer",
+              boxShadow: active ? "var(--shadow-sm)" : "none",
+              transition: `all var(--dur-fast) var(--ease-out)`,
+            }}
+          >
+            {opt.icon}
+            {opt.label}
+          </button>
+        );
+      })}
     </div>
   );
 }
@@ -499,7 +572,7 @@ function FormButtons({
           gap: "var(--sp-1)",
           padding: "10px var(--sp-4)",
           background: canSubmit ? "var(--jmh-blue)" : "var(--jmh-blue-30)",
-          color: "white",
+          color: "var(--text-on-blue)",
           borderRadius: "var(--r-full)",
           border: "none",
           fontFamily: "var(--font)",

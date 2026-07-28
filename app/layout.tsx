@@ -2,6 +2,8 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { APP_NAME } from "@/lib/constants";
 import PWARegister from "@/components/PWARegister";
+import ThemeProvider from "@/components/ui/ThemeProvider";
+import { THEME_INIT_SCRIPT } from "@/lib/theme";
 
 // Icons/manifest go through Next's typed metadata API — no hand-written <link>
 // tags, and no manifest link here: Next injects one for app/manifest.ts.
@@ -39,9 +41,17 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="he" dir="rtl">
+    // suppressHydrationWarning: the inline script below mutates <html>'s
+    // data-theme before React hydrates, so the server markup deliberately
+    // doesn't match. It suppresses that one attribute diff, nothing deeper.
+    <html lang="he" dir="rtl" suppressHydrationWarning>
+      <head>
+        {/* MUST stay first and blocking — it stamps data-theme before the first
+            paint, which is the whole reason dark mode doesn't flash white. */}
+        <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
+      </head>
       <body>
-        {children}
+        <ThemeProvider>{children}</ThemeProvider>
         <PWARegister />
       </body>
     </html>

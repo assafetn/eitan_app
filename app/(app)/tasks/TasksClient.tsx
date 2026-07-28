@@ -572,7 +572,7 @@ export default function TasksClient({
             gap: "var(--sp-1)",
             padding: "10px 16px",
             background: "var(--jmh-blue)",
-            color: "white",
+            color: "var(--text-on-blue)",
             borderRadius: "var(--r-full)",
             border: "none",
             fontFamily: "var(--font)",

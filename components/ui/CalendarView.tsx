@@ -301,7 +301,7 @@ function DayDetailSheet({
     <>
       <div
         onClick={onClose}
-        style={{ position: "fixed", inset: 0, background: "oklch(0.13 0.020 240 / 0.4)", zIndex: 60 }}
+        style={{ position: "fixed", inset: 0, background: "var(--overlay)", zIndex: 60 }}
       />
       <div
         style={{

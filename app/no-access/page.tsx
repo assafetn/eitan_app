@@ -21,7 +21,7 @@ export default function NoAccessPage() {
           height: 48,
           borderRadius: "var(--r-full)",
           background: "var(--jmh-coral-bg)",
-          border: "1px solid oklch(0.60 0.15 22 / 0.25)",
+          border: "1px solid var(--jmh-coral)",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",

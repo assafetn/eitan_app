@@ -258,7 +258,7 @@ export default function AddTaskModal({
         style={{
           position: "fixed",
           inset: 0,
-          background: "oklch(0.13 0.020 240 / 0.4)",
+          background: "var(--overlay)",
           zIndex: 60,
         }}
       />
@@ -383,7 +383,7 @@ export default function AddTaskModal({
             style={{ ...inputStyle, flexShrink: 0 }}
             onFocus={(e) => {
               e.target.style.borderColor = "var(--jmh-blue-60)";
-              e.target.style.boxShadow = "0 0 0 3px oklch(0.54 0.14 240 / 0.12)";
+              e.target.style.boxShadow = "0 0 0 3px var(--jmh-blue-30)";
             }}
             onBlur={(e) => {
               e.target.style.borderColor = "var(--border-strong)";
@@ -408,7 +408,7 @@ export default function AddTaskModal({
             }}
             onFocus={(e) => {
               e.target.style.borderColor = "var(--jmh-blue-60)";
-              e.target.style.boxShadow = "0 0 0 3px oklch(0.54 0.14 240 / 0.12)";
+              e.target.style.boxShadow = "0 0 0 3px var(--jmh-blue-30)";
             }}
             onBlur={(e) => {
               e.target.style.borderColor = "var(--border-strong)";
@@ -546,7 +546,7 @@ export default function AddTaskModal({
             style={{ ...inputStyle, appearance: "none", cursor: "pointer", flexShrink: 0 }}
             onFocus={(e) => {
               e.target.style.borderColor = "var(--jmh-blue-60)";
-              e.target.style.boxShadow = "0 0 0 3px oklch(0.54 0.14 240 / 0.12)";
+              e.target.style.boxShadow = "0 0 0 3px var(--jmh-blue-30)";
             }}
             onBlur={(e) => {
               e.target.style.borderColor = "var(--border-strong)";
@@ -751,7 +751,7 @@ export default function AddTaskModal({
                         borderRadius: "var(--r-full)",
                         border: `1px solid ${active ? "var(--jmh-blue)" : "var(--border-strong)"}`,
                         background: active ? "var(--jmh-blue)" : "var(--surface)",
-                        color: active ? "white" : "var(--text-secondary)",
+                        color: active ? "var(--text-on-blue)" : "var(--text-secondary)",
                         fontFamily: "var(--font)",
                         fontSize: "var(--text-sm)",
                         fontWeight: 600,
@@ -801,7 +801,7 @@ export default function AddTaskModal({
                 width: "100%",
                 padding: "14px var(--sp-6)",
                 background: canSubmit ? "var(--jmh-blue)" : "var(--jmh-blue-30)",
-                color: "white",
+                color: "var(--text-on-blue)",
                 borderRadius: "var(--r-full)",
                 border: "none",
                 fontFamily: "var(--font)",
@@ -943,7 +943,7 @@ function InlineCreate({
             gap: "var(--sp-1)",
             padding: "9px var(--sp-4)",
             background: canConfirm ? "var(--jmh-blue)" : "var(--jmh-blue-30)",
-            color: "white",
+            color: "var(--text-on-blue)",
             borderRadius: "var(--r-full)",
             border: "none",
             fontFamily: "var(--font)",

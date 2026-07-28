@@ -112,7 +112,7 @@ export default function TaskRow({ task, adults, date, status, isRecurring, onTog
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-            color: "white",
+            color: "var(--text-on-blue)",
             transition: `background var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out)`,
           }}
         >

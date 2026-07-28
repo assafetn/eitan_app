@@ -101,7 +101,7 @@ export async function NavBadge({ kind }: { kind: "tasks" | "shopping" }) {
           justifyContent: "center",
           borderRadius: "var(--r-full)",
           background: "var(--jmh-coral)",
-          color: "white",
+          color: "var(--text-on-blue)",
           fontFamily: "var(--font)",
           fontSize: 11,
           fontWeight: 600,

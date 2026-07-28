@@ -517,7 +517,7 @@ export default function HomeClient({
           justifyContent: "center",
           gap: "var(--sp-1)",
           background: "var(--jmh-blue)",
-          color: "white",
+          color: "var(--text-on-blue)",
           border: "none",
           borderRadius: "var(--r-md)",
           fontFamily: "var(--font)",

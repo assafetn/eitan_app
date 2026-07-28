@@ -54,7 +54,7 @@ const inputStyle: React.CSSProperties = {
 
 function focusRing(e: React.FocusEvent<HTMLInputElement>) {
   e.target.style.borderColor = "var(--jmh-blue-60)";
-  e.target.style.boxShadow = "0 0 0 3px oklch(0.54 0.14 240 / 0.12)";
+  e.target.style.boxShadow = "0 0 0 3px var(--jmh-blue-30)";
 }
 function blurRing(e: React.FocusEvent<HTMLInputElement>) {
   e.target.style.borderColor = "var(--border-strong)";
@@ -258,7 +258,7 @@ export default function ShoppingClient({ initialItems }: Props) {
             height: 44,
             flexShrink: 0,
             background: name.trim() ? "var(--jmh-blue)" : "var(--jmh-blue-30)",
-            color: "white",
+            color: "var(--text-on-blue)",
             border: "none",
             borderRadius: "var(--r-md)",
             cursor: name.trim() ? "pointer" : "not-allowed",
@@ -377,7 +377,7 @@ function ItemRow({
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-            color: "white",
+            color: "var(--text-on-blue)",
             transition: `background var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out)`,
           }}
         >

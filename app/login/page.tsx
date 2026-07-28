@@ -56,14 +56,14 @@ export default async function LoginPage({
             <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
               <path
                 d="M8 9C8 9 10 7 16 7C22 7 24 9 24 9"
-                stroke="white"
+                stroke="var(--text-on-blue)"
                 strokeWidth="2"
                 strokeLinecap="round"
               />
-              <circle cx="10" cy="16" r="3" fill="white" fillOpacity="0.9" />
-              <circle cx="22" cy="16" r="3" fill="white" fillOpacity="0.9" />
-              <circle cx="13" cy="22" r="2" fill="white" fillOpacity="0.6" />
-              <circle cx="19" cy="22" r="2" fill="white" fillOpacity="0.6" />
+              <circle cx="10" cy="16" r="3" fill="var(--text-on-blue)" fillOpacity="0.9" />
+              <circle cx="22" cy="16" r="3" fill="var(--text-on-blue)" fillOpacity="0.9" />
+              <circle cx="13" cy="22" r="2" fill="var(--text-on-blue)" fillOpacity="0.6" />
+              <circle cx="19" cy="22" r="2" fill="var(--text-on-blue)" fillOpacity="0.6" />
             </svg>
           </div>
 
@@ -113,7 +113,7 @@ export default async function LoginPage({
                 fontSize: "var(--text-sm)",
                 color: "var(--jmh-coral)",
                 background: "var(--jmh-coral-bg)",
-                border: "1px solid oklch(0.60 0.15 22 / 0.25)",
+                border: "1px solid var(--jmh-coral)",
                 borderRadius: "var(--r-sm)",
                 padding: "var(--sp-2) var(--sp-3)",
                 margin: 0,
