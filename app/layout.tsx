@@ -12,13 +12,21 @@ export const metadata: Metadata = {
   description: "ניהול משימות ולוח שנה משפחתי",
   applicationName: APP_NAME,
   // iOS Safari installability: treat as a standalone web app.
-  appleWebApp: { capable: true, statusBarStyle: "default", title: "איתן" },
+  // black-translucent lets the app paint under the status bar, which is what
+  // the dark charcoal icon/tile expects.
+  appleWebApp: {
+    capable: true,
+    title: "איתן",
+    statusBarStyle: "black-translucent",
+  },
+  // The iPhone home-screen icon comes from `apple` (the web-clip link tag) —
+  // NOT from the manifest, which only serves Android/desktop.
   icons: {
     icon: [
-      { url: "/icons/icon-192.png", sizes: "192x192", type: "image/png" },
-      { url: "/icons/icon-512.png", sizes: "512x512", type: "image/png" },
+      { url: "/favicon-32.png", sizes: "32x32", type: "image/png" },
+      { url: "/icon-192.png", sizes: "192x192", type: "image/png" },
     ],
-    apple: [{ url: "/icons/apple-touch-icon.png", sizes: "180x180" }],
+    apple: [{ url: "/apple-touch-icon.png", sizes: "180x180", type: "image/png" }],
   },
   other: { "mobile-web-app-capable": "yes" },
 };

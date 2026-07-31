@@ -21,8 +21,8 @@ self.addEventListener('push', (event) => {
     tag: payload.tag || 'eitan-generic',
     dir: 'rtl',
     lang: 'he',
-    icon: '/icons/icon-192.png',
-    badge: '/icons/icon-192.png',
+    icon: '/icon-192.png',
+    badge: '/icon-192.png',
     data: { url: payload.url || '/tasks' },
     renotify: false,
   };

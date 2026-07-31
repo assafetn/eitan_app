@@ -1,0 +1,55 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <!--
+    איתן — master app icon, 1024x1024.
+
+    Full-bleed, opaque, square with NO pre-rounded corners: iOS applies its own
+    squircle mask and composites away alpha, so rounding here would show up as a
+    double-rounded artifact inside the system mask.
+
+    GLYPH SOURCE — the Hebrew א below is STATIC PATH DATA, baked from the Rubik
+    500 Hebrew outline (a devDependency) into absolute 1024-space coordinates by
+    scripts/_bake step. There is no <text> element and no font is read at render
+    time, so this file rasterises identically on every machine — the same
+    guarantee hand-stroked geometry was meant to provide. See the report /
+    git history for why the three-stroke construction was replaced.
+
+    Glyph bbox is x 267.21–756.79 / y 239–785: centred at exactly (512,512),
+    546px tall = 53.3% of canvas, the intended optical size.
+
+    Regenerate the PNGs with:  npm run icons
+  -->
+  <defs>
+    <!-- Tile: the charcoal ramp that lets the icon sit quietly next to iOS 18
+         dark-appearance system icons. -->
+    <linearGradient id="tileGrad" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="0" y2="1024">
+      <stop offset="0" stop-color="#2C2C2E"/>
+      <stop offset="1" stop-color="#161618"/>
+    </linearGradient>
+
+    <!-- Glyph: muted silver, NOT #FFFFFF — pure white is why the old icon
+         shouted next to its neighbours. userSpaceOnUse so the ramp spans the
+         glyph's real 239–785 extent. -->
+    <linearGradient id="glyphGrad" gradientUnits="userSpaceOnUse" x1="0" y1="239" x2="0" y2="785">
+      <stop offset="0" stop-color="#D8D8DE"/>
+      <stop offset="1" stop-color="#8E8E96"/>
+    </linearGradient>
+  </defs>
+
+  <rect x="0" y="0" width="1024" height="1024" fill="url(#tileGrad)"/>
+
+  <!-- Soft top bevel, mimicking the highlight on iOS dark icons. -->
+  <rect x="0" y="0" width="1024" height="3" fill="#FFFFFF" opacity="0.06"/>
+
+  <!--
+    id="glyph" and the `scale(1)` below are the hook scripts/generate-icons.mjs
+    rewrites to shrink the glyph for the Android maskable variant — keep both
+    verbatim.
+  -->
+  <g id="glyph" transform="translate(512,512) scale(1) translate(-512,-512)">
+    <!-- Emboss: hard 3px offset, drawn behind. No blur filter — blurs rasterise
+         inconsistently across the export sizes. -->
+    <path transform="translate(0,3)" fill="#000000" fill-opacity="0.25" d="M736.71 785L657.35 785Q644.91 785 638.22 778.31L627.70 767.79L433.59 491.44Q411.60 508.65 400.12 528.73Q385.78 554.55 381.48 580.85Q377.17 607.14 377.17 631.05L377.17 761.09Q377.17 771.61 370.48 778.31Q363.79 785 354.22 785L290.16 785Q280.60 785 273.90 778.31Q267.21 771.61 267.21 761.09L267.21 629.14Q267.21 580.37 276.29 540.21Q285.38 500.05 311.19 464.67Q333.19 434.07 373.35 406.34L280.60 274.38Q274.86 265.77 274.86 259.08Q274.86 250.47 280.60 244.74Q286.33 239 294.94 239L370.48 239Q383.87 239 390.56 245.69Q397.25 252.39 401.08 257.17L578.94 507.70Q602.84 494.31 614.32 478.05Q630.57 457.02 633.92 434.07Q637.26 411.12 637.26 387.21L637.26 262.91Q637.26 252.39 643.48 245.69Q649.70 239 660.21 239L727.15 239Q737.67 239 744.36 245.69Q751.05 252.39 751.05 262.91L751.05 391.99Q751.05 431.20 741.01 468.49Q730.97 505.78 702.29 539.25Q679.34 566.03 639.18 591.84L751.05 749.62Q754.88 755.36 755.84 758.70Q756.79 762.05 756.79 764.92Q756.79 773.53 750.58 779.26Q744.36 785 736.71 785"/>
+
+    <path fill="url(#glyphGrad)" d="M736.71 785L657.35 785Q644.91 785 638.22 778.31L627.70 767.79L433.59 491.44Q411.60 508.65 400.12 528.73Q385.78 554.55 381.48 580.85Q377.17 607.14 377.17 631.05L377.17 761.09Q377.17 771.61 370.48 778.31Q363.79 785 354.22 785L290.16 785Q280.60 785 273.90 778.31Q267.21 771.61 267.21 761.09L267.21 629.14Q267.21 580.37 276.29 540.21Q285.38 500.05 311.19 464.67Q333.19 434.07 373.35 406.34L280.60 274.38Q274.86 265.77 274.86 259.08Q274.86 250.47 280.60 244.74Q286.33 239 294.94 239L370.48 239Q383.87 239 390.56 245.69Q397.25 252.39 401.08 257.17L578.94 507.70Q602.84 494.31 614.32 478.05Q630.57 457.02 633.92 434.07Q637.26 411.12 637.26 387.21L637.26 262.91Q637.26 252.39 643.48 245.69Q649.70 239 660.21 239L727.15 239Q737.67 239 744.36 245.69Q751.05 252.39 751.05 262.91L751.05 391.99Q751.05 431.20 741.01 468.49Q730.97 505.78 702.29 539.25Q679.34 566.03 639.18 591.84L751.05 749.62Q754.88 755.36 755.84 758.70Q756.79 762.05 756.79 764.92Q756.79 773.53 750.58 779.26Q744.36 785 736.71 785"/>
+  </g>
+</svg>
