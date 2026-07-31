@@ -26,11 +26,13 @@
       <stop offset="1" stop-color="#161618"/>
     </linearGradient>
 
-    <!-- Glyph: muted silver, NOT #FFFFFF — pure white is why the old icon
-         shouted next to its neighbours. userSpaceOnUse so the ramp spans the
-         glyph's real 239–785 extent. -->
+    <!-- Glyph: muted silver, NOT #FFFFFF. Top stop pulled down from #D8D8DE to
+         #B6B6BC after checking it on-device — against the iOS 18 dark-appearance
+         icons either side of it, the brighter top read as lit-up rather than as
+         part of the set. Bottom stop unchanged. userSpaceOnUse so the ramp spans
+         the glyph's real 239–785 extent. -->
     <linearGradient id="glyphGrad" gradientUnits="userSpaceOnUse" x1="0" y1="239" x2="0" y2="785">
-      <stop offset="0" stop-color="#D8D8DE"/>
+      <stop offset="0" stop-color="#B6B6BC"/>
       <stop offset="1" stop-color="#8E8E96"/>
     </linearGradient>
   </defs>
