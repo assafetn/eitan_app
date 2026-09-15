@@ -1,7 +1,7 @@
 import { SkelBar, SkelList, SkelPageShell } from "@/components/ui/Skeleton";
 
-// Matches TasksClient: title + "add" pill, the list/calendar view toggle, the
-// filter chip rows, then a task list.
+// Matches TasksClient: title + "add" pill, the filter chip rows, then a task
+// list.
 export default function TasksLoading() {
   return (
     <SkelPageShell>
@@ -17,9 +17,6 @@ export default function TasksLoading() {
         <SkelBar w="35%" h={28} radius="var(--r-md)" />
         <SkelBar w={120} h={40} radius="var(--r-full)" />
       </div>
-
-      {/* View toggle (full-width segmented pill) */}
-      <SkelBar w="100%" h={44} radius="var(--r-full)" style={{ marginBottom: "var(--sp-5)" }} />
 
       {/* Filter chip rows */}
       <div style={{ display: "flex", gap: "var(--sp-2)", flexWrap: "wrap", marginBottom: "var(--sp-3)" }}>

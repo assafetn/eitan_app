@@ -32,7 +32,7 @@ export function SkelCircle({ size = 20 }: { size?: number }) {
   );
 }
 
-// Mirrors the surface/border card shared by task, shopping and family rows:
+// Mirrors the surface/border card shared by task and family rows:
 // a leading circle + two stacked text lines.
 export function SkelRowCard({ h }: { h?: number }) {
   return (

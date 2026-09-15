@@ -39,17 +39,12 @@ export default async function AppLayout({
     >
       <RefreshOnFocus />
       <div style={{ flex: 1 }}>{children}</div>
-      {/* The nav paints immediately; only the badge slots suspend (fallback null)
-          and stream in. The two NavBadge renders share one cached Promise.all. */}
+      {/* The nav paints immediately; only the badge slot suspends (fallback null)
+          and streams in. */}
       <BottomNav
         tasksBadge={
           <Suspense fallback={null}>
             <NavBadge kind="tasks" />
-          </Suspense>
-        }
-        shoppingBadge={
-          <Suspense fallback={null}>
-            <NavBadge kind="shopping" />
           </Suspense>
         }
       />

@@ -9,7 +9,7 @@ import { THEME_INIT_SCRIPT } from "@/lib/theme";
 // tags, and no manifest link here: Next injects one for app/manifest.ts.
 export const metadata: Metadata = {
   title: APP_NAME,
-  description: "ניהול משימות ולוח שנה משפחתי",
+  description: "ניהול משימות ומשק בית למשפחה",
   applicationName: APP_NAME,
   // iOS Safari installability: treat as a standalone web app.
   // black-translucent lets the app paint under the status bar, which is what

@@ -17,10 +17,9 @@ import { getTaskPeople } from "@/lib/taskPeople";
 import { useCoalescedRefresh } from "@/lib/useCoalescedRefresh";
 import TaskRow from "@/components/ui/TaskRow";
 import AddTaskModal from "@/components/ui/AddTaskModal";
-import CalendarView from "@/components/ui/CalendarView";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import Toast from "@/components/ui/Toast";
-import { CalendarDays, List, Plus } from "lucide-react";
+import { Plus } from "lucide-react";
 
 const SAVE_FAILED = "השמירה נכשלה, נסו שוב";
 const DELETE_FAILED = "המחיקה נכשלה, נסו שוב";
@@ -42,16 +41,12 @@ interface Props {
   openOnly?: boolean;
   /** Whether to show the אחריות/owner filter bar. /tasks only; off elsewhere. */
   showFilter?: boolean;
-  /** Whether to show the רשימה/לוח שנה view toggle. /tasks only; off elsewhere. */
-  showViewToggle?: boolean;
 }
 
 // אחריות filter selection: a responsibility id, "all", or "none" (unassigned).
 type RespFilter = string | "all" | "none";
 // owner filter selection: an adult member id, or "all".
 type OwnerFilter = string | "all";
-// Which view of the same data is shown in the משימות tab.
-type TaskView = "list" | "calendar";
 
 const HORIZON_DAYS = 90;
 
@@ -76,7 +71,6 @@ export default function TasksClient({
   showAddButton = true,
   openOnly = false,
   showFilter = false,
-  showViewToggle = false,
 }: Props) {
   const [tasks, setTasks] = useState<Task[]>(initialTasks);
   const [overrides, setOverrides] = useState<OccurrenceOverride[]>(initialOverrides);
@@ -98,8 +92,6 @@ export default function TasksClient({
   // Filter state — local UI only, resets on reload (7.3). The two cuts combine.
   const [respFilter, setRespFilter] = useState<RespFilter>("all");
   const [ownerFilter, setOwnerFilter] = useState<OwnerFilter>("all");
-  // View toggle — local UI only. Always opens to the list (locked: list is primary).
-  const [view, setView] = useState<TaskView>("list");
 
   const occurrences = useMemo<Occurrence[]>(() => {
     const start = todayISO();
@@ -189,10 +181,9 @@ export default function TasksClient({
     return { all: allSet.size, none: noneSet.size, resp, owner };
   }, [occurrences, members]);
 
-  // ONE filter predicate, shared by BOTH views. Recurring occurrences carry
-  // their series parent in `occ.task`, so filtering by responsibility/owner
-  // includes/excludes them by the PARENT (same rule as 7.3). useCallback keeps
-  // its identity stable so CalendarView's memo doesn't churn.
+  // The filter predicate. Recurring occurrences carry their series parent in
+  // `occ.task`, so filtering by responsibility/owner includes/excludes them by
+  // the PARENT (same rule as 7.3).
   const filterActive = respFilter !== "all" || ownerFilter !== "all";
   const matchesFilter = useCallback(
     (t: Task): boolean => {
@@ -214,7 +205,7 @@ export default function TasksClient({
     [respFilter, ownerFilter, members]
   );
 
-  // List view: narrow the resolved occurrences; date grouping below is unchanged.
+  // Narrow the resolved occurrences; date grouping below is unchanged.
   const filteredOccurrences = useMemo(
     () => (filterActive ? occurrences.filter((occ) => matchesFilter(occ.task)) : occurrences),
     [occurrences, filterActive, matchesFilter]
@@ -601,14 +592,8 @@ export default function TasksClient({
         )}
       </div>
 
-      {/* View toggle — swaps the content below between the list and the month
-          calendar. Both views share the loaded data + the filter bar below. */}
-      {showViewToggle && (
-        <ViewToggle view={view} onChange={setView} />
-      )}
-
-      {/* Filter bar — sits between the toggle and the content so it visibly
-          governs whichever view is shown. /tasks only; needs responsibilities. */}
+      {/* Filter bar — sits between the header and the list so it visibly
+          governs the content below. /tasks only; needs responsibilities. */}
       {showFilter && responsibilities.length > 0 && (
         <FilterBar
           responsibilities={responsibilities}
@@ -621,59 +606,46 @@ export default function TasksClient({
         />
       )}
 
-      {view === "calendar" ? (
-        <CalendarView
-          tasks={tasks}
-          overrides={overrides}
-          adults={members}
-          filterTask={matchesFilter}
-          onToggle={toggleOccurrence}
-          onEdit={(occ) => setEditingTask(occ.task)}
-        />
-      ) : (
-        <>
-          {/* Empty state — filter-aware copy */}
-          {filteredOccurrences.length === 0 && (
-            <div
-              style={{
-                textAlign: "center",
-                padding: "var(--sp-16) var(--sp-6)",
-                color: "var(--text-muted)",
-              }}
-            >
-              <svg
-                width="40"
-                height="40"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="var(--border-strong)"
-                strokeWidth="1.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                style={{ marginBottom: "var(--sp-4)" }}
-              >
-                <path d="M9 11l3 3L22 4" />
-                <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
-              </svg>
-              <p style={{ fontFamily: "var(--font)", fontSize: "var(--text-base)", margin: 0 }}>
-                {filterActive ? "אין משימות באחריות זו" : "אין משימות פתוחות"}
-              </p>
-            </div>
-          )}
+      {/* Empty state — filter-aware copy */}
+      {filteredOccurrences.length === 0 && (
+        <div
+          style={{
+            textAlign: "center",
+            padding: "var(--sp-16) var(--sp-6)",
+            color: "var(--text-muted)",
+          }}
+        >
+          <svg
+            width="40"
+            height="40"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="var(--border-strong)"
+            strokeWidth="1.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            style={{ marginBottom: "var(--sp-4)" }}
+          >
+            <path d="M9 11l3 3L22 4" />
+            <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
+          </svg>
+          <p style={{ fontFamily: "var(--font)", fontSize: "var(--text-base)", margin: 0 }}>
+            {filterActive ? "אין משימות באחריות זו" : "אין משימות פתוחות"}
+          </p>
+        </div>
+      )}
 
-          {overdue.length > 0 && (
-            <Section title="באיחור" accent>{overdue.map(renderRow)}</Section>
-          )}
-          {today.length > 0 && (
-            <Section title="היום">{today.map(renderRow)}</Section>
-          )}
-          {upcoming.length > 0 && (
-            <Section title="קרוב">{upcoming.map(renderRow)}</Section>
-          )}
-          {noDate.length > 0 && (
-            <Section title="ללא תאריך">{noDate.map(renderRow)}</Section>
-          )}
-        </>
+      {overdue.length > 0 && (
+        <Section title="באיחור" accent>{overdue.map(renderRow)}</Section>
+      )}
+      {today.length > 0 && (
+        <Section title="היום">{today.map(renderRow)}</Section>
+      )}
+      {upcoming.length > 0 && (
+        <Section title="קרוב">{upcoming.map(renderRow)}</Section>
+      )}
+      {noDate.length > 0 && (
+        <Section title="ללא תאריך">{noDate.map(renderRow)}</Section>
       )}
 
       {(showAdd || editingTask) && (
@@ -741,79 +713,6 @@ function groupOccurrences(occs: Occurrence[]) {
   upcoming.sort(byDate);
 
   return { overdue, today, upcoming, noDate };
-}
-
-// Segmented control to switch the משימות tab between the list and the month
-// calendar. Both render the same data; this only swaps the view below.
-function ViewToggle({ view, onChange }: { view: TaskView; onChange: (v: TaskView) => void }) {
-  return (
-    <div style={{ display: "flex", marginBottom: "var(--sp-5)" }}>
-      <div
-        style={{
-          display: "inline-flex",
-          width: "100%",
-          padding: 3,
-          gap: 3,
-          background: "var(--bg)",
-          border: "1px solid var(--border)",
-          borderRadius: "var(--r-full)",
-        }}
-      >
-        <ViewSegItem
-          label="רשימה"
-          active={view === "list"}
-          onClick={() => onChange("list")}
-          icon={<List size={15} strokeWidth={2} />}
-        />
-        <ViewSegItem
-          label="לוח שנה"
-          active={view === "calendar"}
-          onClick={() => onChange("calendar")}
-          icon={<CalendarDays size={15} strokeWidth={2} />}
-        />
-      </div>
-    </div>
-  );
-}
-
-function ViewSegItem({
-  label,
-  active,
-  onClick,
-  icon,
-}: {
-  label: string;
-  active: boolean;
-  onClick: () => void;
-  icon: React.ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      style={{
-        flex: 1,
-        display: "inline-flex",
-        alignItems: "center",
-        justifyContent: "center",
-        gap: "var(--sp-1)",
-        padding: "8px 12px",
-        borderRadius: "var(--r-full)",
-        border: "none",
-        background: active ? "var(--surface)" : "transparent",
-        color: active ? "var(--jmh-blue)" : "var(--text-muted)",
-        fontFamily: "var(--font)",
-        fontSize: "var(--text-sm)",
-        fontWeight: active ? 600 : 500,
-        cursor: "pointer",
-        boxShadow: active ? "var(--shadow-sm)" : "none",
-        transition: `all var(--dur-fast) var(--ease-out)`,
-      }}
-    >
-      {icon}
-      {label}
-    </button>
-  );
 }
 
 // Filter bar: אחריות chips (primary) + a compact owner segmented control

@@ -3,18 +3,17 @@ import { createClient } from "@/lib/supabase/server";
 import { getSessionUser } from "@/lib/currentUser";
 import { todayISO } from "@/lib/recurrence";
 
-// One request-scoped fetch that runs BOTH nav counts in a single Promise.all,
-// head-only (`count: 'exact', head: true`) so no row data is transferred. It is
-// wrapped in React `cache()` so the two <NavBadge> renders below (one per icon,
-// each in its own Suspense boundary) share this single execution — the queries
-// run exactly once per request even though there are two badge slots.
+// One request-scoped head-only count (`count: 'exact', head: true`) so no row
+// data is transferred. It is wrapped in React `cache()` so the <NavBadge>
+// render below (in its own Suspense boundary) shares this single execution —
+// the query runs exactly once per request.
 //
 // LIMITATION (accepted by design): virtual recurring occurrences that fall due
 // today are NOT counted here. Expanding recurrence on the layout's hot path would
 // reintroduce the navigation latency this streamed design avoids. We count only
 // stored rows; lib/recurrence.ts is untouched and no occurrence rows are
 // pre-generated.
-export const getNavBadgeCounts = cache(async (): Promise<{ tasks: number; shopping: number }> => {
+export const getNavBadgeCounts = cache(async (): Promise<{ tasks: number }> => {
   const supabase = await createClient();
 
   // The current adult, resolved the same way the app already does (getMyMemberId):
@@ -47,26 +46,21 @@ export const getNavBadgeCounts = cache(async (): Promise<{ tasks: number; shoppi
     ? tasksQuery.or(`and(priority.eq.high,assignee_id.eq.${myId}),due_date.eq.${today}`)
     : tasksQuery.eq("due_date", today);
 
-  const shoppingQuery = supabase
-    .from("shopping_items")
-    .select("id", { count: "exact", head: true })
-    .eq("is_checked", false);
+  const tasksRes = await tasksQuery;
 
-  const [tasksRes, shoppingRes] = await Promise.all([tasksQuery, shoppingQuery]);
-
-  return { tasks: tasksRes.count ?? 0, shopping: shoppingRes.count ?? 0 };
+  return { tasks: tasksRes.count ?? 0 };
 });
 
 // Async server component rendered (Suspense-wrapped) into a nav icon's corner.
 // Returns null when the count is 0 so nothing renders — never a zero badge.
-export async function NavBadge({ kind }: { kind: "tasks" | "shopping" }) {
+export async function NavBadge({ kind }: { kind: "tasks" }) {
   const counts = await getNavBadgeCounts();
-  const count = kind === "tasks" ? counts.tasks : counts.shopping;
+  const count = counts[kind];
   if (count <= 0) return null;
 
   // Accessible text (not color): contributes to the nav link's accessible name
   // so the count is announced. The visual pill itself is aria-hidden.
-  const srText = kind === "tasks" ? `${count} משימות דורשות תשומת לב` : `${count} פריטים בקנייה`;
+  const srText = `${count} משימות דורשות תשומת לב`;
   const display = count > 99 ? "99+" : String(count);
 
   return (

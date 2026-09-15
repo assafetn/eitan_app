@@ -35,7 +35,7 @@ function Bar({
 }
 
 // A placeholder that mirrors the surface/border card used across the tabs
-// (task rows, shopping rows, family cards): a leading circle + two text lines.
+// (task rows, family cards): a leading circle + two text lines.
 function RowCard() {
   return (
     <div

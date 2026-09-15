@@ -83,14 +83,3 @@ export interface Task {
   responsibility?: Responsibility | null;
   labels?: Label[];
 }
-
-export interface ShoppingItem {
-  id: string;
-  name: string;
-  quantity: string | null;
-  is_checked: boolean;
-  added_by: string;
-  created_at: string;
-  // joined
-  adder?: FamilyMember | null;
-}

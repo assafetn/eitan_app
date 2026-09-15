@@ -20,7 +20,7 @@ export default async function TasksPage() {
     { data: labels },
   ] = await Promise.all([
     // responsibility.owner is intentionally not joined — nothing on the task
-    // list/calendar reads it (getTaskPeople resolves people from assignee/
+    // list reads it (getTaskPeople resolves people from assignee/
     // is_shared; the badge shows only the responsibility name + colour).
     supabase
       .from("tasks")
@@ -62,7 +62,6 @@ export default async function TasksPage() {
       responsibilities={(responsibilities as Responsibility[]) ?? []}
       labels={(labels as Label[]) ?? []}
       showFilter
-      showViewToggle
     />
   );
 }

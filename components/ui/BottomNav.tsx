@@ -26,34 +26,20 @@ const tabs = [
       </svg>
     ),
   },
-  {
-    id: "shopping",
-    href: "/shopping",
-    label: "קניות",
-    icon: (
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/>
-        <line x1="3" y1="6" x2="21" y2="6"/>
-        <path d="M16 10a4 4 0 0 1-8 0"/>
-      </svg>
-    ),
-  },
 ] as const;
 // NOTE: משפחה is intentionally not a nav tab — the /family route still exists and
-// is reached from Settings (see SettingsClient). Three tabs, evenly distributed.
+// is reached from Settings (see SettingsClient). Two tabs, evenly distributed.
 
 export default function BottomNav({
   tasksBadge,
-  shoppingBadge,
 }: {
-  // Streamed server-rendered badge nodes (each Suspense-wrapped by the layout).
-  // Passing them in as props keeps the nav painting immediately — only the badge
-  // slots suspend.
+  // Streamed server-rendered badge node (Suspense-wrapped by the layout).
+  // Passing it in as a prop keeps the nav painting immediately — only the badge
+  // slot suspends.
   tasksBadge?: React.ReactNode;
-  shoppingBadge?: React.ReactNode;
 } = {}) {
   const pathname = usePathname();
-  const badgeFor: Record<string, React.ReactNode> = { tasks: tasksBadge, shopping: shoppingBadge };
+  const badgeFor: Record<string, React.ReactNode> = { tasks: tasksBadge };
 
   return (
     <nav
@@ -69,7 +55,7 @@ export default function BottomNav({
         borderRadius: "var(--r-xl)",
         padding: 6,
         display: "flex",
-        gap: "var(--sp-2)", // >=8px between the three tabs
+        gap: "var(--sp-2)", // >=8px between the tabs
         boxShadow: "var(--shadow-lg)",
         zIndex: 50,
       }}
@@ -87,7 +73,7 @@ export default function BottomNav({
               display: "flex",
               // column-reverse: icon stays visually on top, but the label comes
               // first in DOM so the streamed badge's screen-reader text (inside
-              // the icon wrapper) is announced AFTER the label — "קניות, 3 פריטים".
+              // the icon wrapper) is announced AFTER the label — "משימות, 3 משימות…".
               flexDirection: "column-reverse",
               alignItems: "center",
               gap: 3,
