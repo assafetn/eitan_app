@@ -42,7 +42,9 @@ export default function Toast({ message, onDismiss }: Props) {
         justifyContent: "center",
         padding: "0 var(--sp-4)",
         pointerEvents: "none", // never intercept taps meant for the nav/content
-        zIndex: 60, // above the bottom nav (50)
+        // Above the bottom nav (50) AND the add/edit sheet (backdrop 60, sheet
+        // 70): a failed save keeps the sheet open, so the toast must show on it.
+        zIndex: 80,
       }}
     >
       <div

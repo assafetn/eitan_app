@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import { Rubik } from "next/font/google";
 import "./globals.css";
 import { APP_NAME } from "@/lib/constants";
 import PWARegister from "@/components/PWARegister";
@@ -7,6 +8,16 @@ import { THEME_INIT_SCRIPT } from "@/lib/theme";
 
 // Icons/manifest go through Next's typed metadata API — no hand-written <link>
 // tags, and no manifest link here: Next injects one for app/manifest.ts.
+// The UI typeface. Rubik has a full Hebrew set (DM Sans, the previous face, is
+// Latin-only, so every Hebrew string was falling back to the system font). It
+// is also the face the app-icon glyph is baked from. Variable font → all
+// weights from one file; exposed as --font-rubik, consumed by --font.
+const rubik = Rubik({
+  subsets: ["hebrew", "latin"],
+  display: "swap",
+  variable: "--font-rubik",
+});
+
 export const metadata: Metadata = {
   title: APP_NAME,
   description: "ניהול משימות ומשק בית למשפחה",
@@ -52,7 +63,7 @@ export default function RootLayout({
     // suppressHydrationWarning: the inline script below mutates <html>'s
     // data-theme before React hydrates, so the server markup deliberately
     // doesn't match. It suppresses that one attribute diff, nothing deeper.
-    <html lang="he" dir="rtl" suppressHydrationWarning>
+    <html lang="he" dir="rtl" className={rubik.variable} suppressHydrationWarning>
       <head>
         {/* MUST stay first and blocking — it stamps data-theme before the first
             paint, which is the whole reason dark mode doesn't flash white. */}

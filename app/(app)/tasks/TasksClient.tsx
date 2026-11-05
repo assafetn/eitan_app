@@ -232,12 +232,14 @@ export default function TasksClient({
       const completedAt = newStatus === "done" ? new Date().toISOString() : null;
       // Keep completed_at in sync locally so the 3-day auto-hide has a timestamp
       // and the row stays put (done, dimmed) instead of vanishing.
+      const prevStatus = occ.task.status;
+      const prevCompletedAt = occ.task.completed_at;
       setTasks((prev) =>
         prev.map((t) =>
           t.id === occ.task.id ? { ...t, status: newStatus, completed_at: completedAt } : t
         )
       );
-      await supabase
+      const { error } = await supabase
         .from("tasks")
         .update({
           status: newStatus,
@@ -245,6 +247,16 @@ export default function TasksClient({
           updated_at: new Date().toISOString(),
         })
         .eq("id", occ.task.id);
+      if (error) {
+        // Revert the optimistic flip and say so — never fail silently.
+        setTasks((prev) =>
+          prev.map((t) =>
+            t.id === occ.task.id ? { ...t, status: prevStatus, completed_at: prevCompletedAt } : t
+          )
+        );
+        setToast(SAVE_FAILED);
+        return;
+      }
       scheduleRefresh();
       return;
     }
@@ -295,7 +307,12 @@ export default function TasksClient({
       if (!ov) return;
       setOverrides((prev) => prev.filter((o) => o.id !== ov.id));
       if (!ov.id.startsWith("temp:")) {
-        await supabase.from("tasks").delete().eq("id", ov.id);
+        const { error } = await supabase.from("tasks").delete().eq("id", ov.id);
+        if (error) {
+          setOverrides((prev) => [...prev, ov]);
+          setToast(SAVE_FAILED);
+          return;
+        }
       }
       scheduleRefresh();
     }
@@ -389,7 +406,7 @@ export default function TasksClient({
     // responsibility_id + labels live on the SERIES PARENT (this row). Recurring
     // occurrences inherit them, exactly like child_id and due_time — override
     // rows never carry them.
-    const { data: newTask } = await supabase
+    const { data: newTask, error } = await supabase
       .from("tasks")
       .insert({
         title: data.title,
@@ -410,20 +427,28 @@ export default function TasksClient({
       )
       .single();
 
-    if (newTask) {
-      // Attach the selected labels via the task_labels join.
-      if (data.label_ids.length > 0) {
-        await supabase
-          .from("task_labels")
-          .insert(data.label_ids.map((label_id) => ({ task_id: (newTask as Task).id, label_id })));
-      }
-      // Hydrate the joined responsibility + labels from props so local state is
-      // complete without an extra round-trip. (Row badges render in 7.3.)
-      const responsibility = responsibilities.find((r) => r.id === data.responsibility_id) ?? null;
-      const taskLabels = labels.filter((l) => data.label_ids.includes(l.id));
-      setTasks((prev) => [{ ...(newTask as Task), responsibility, labels: taskLabels }, ...prev]);
-      scheduleRefresh();
+    if (error || !newTask) {
+      // Keep the sheet open with everything the user typed, so they can retry.
+      setToast(SAVE_FAILED);
+      return;
     }
+
+    // Attach the selected labels via the task_labels join. The task itself is
+    // saved at this point, so a label failure gets a toast but still closes.
+    let labelsFailed = false;
+    if (data.label_ids.length > 0) {
+      const { error: labelError } = await supabase
+        .from("task_labels")
+        .insert(data.label_ids.map((label_id) => ({ task_id: (newTask as Task).id, label_id })));
+      labelsFailed = !!labelError;
+    }
+    // Hydrate the joined responsibility + labels from props so local state is
+    // complete without an extra round-trip. (Row badges render in 7.3.)
+    const responsibility = responsibilities.find((r) => r.id === data.responsibility_id) ?? null;
+    const taskLabels = labelsFailed ? [] : labels.filter((l) => data.label_ids.includes(l.id));
+    setTasks((prev) => [{ ...(newTask as Task), responsibility, labels: taskLabels }, ...prev]);
+    if (labelsFailed) setToast(SAVE_FAILED);
+    scheduleRefresh();
     setShowAdd(false);
   }
 
@@ -445,7 +470,7 @@ export default function TasksClient({
     const supabase = createClient();
     const id = editingTask.id;
 
-    await supabase
+    const { error } = await supabase
       .from("tasks")
       .update({
         title: data.title,
@@ -462,16 +487,31 @@ export default function TasksClient({
       })
       .eq("id", id);
 
+    if (error) {
+      // Nothing was saved — keep the sheet open with the edits intact.
+      setToast(SAVE_FAILED);
+      return;
+    }
+
     // Diff the label set: remove dropped links, add new ones.
     const prevLabelIds = new Set((editingTask.labels ?? []).map((l) => l.id));
     const nextLabelIds = new Set(data.label_ids);
     const toRemove = [...prevLabelIds].filter((lid) => !nextLabelIds.has(lid));
     const toAdd = data.label_ids.filter((lid) => !prevLabelIds.has(lid));
+    let labelsFailed = false;
     if (toRemove.length > 0) {
-      await supabase.from("task_labels").delete().eq("task_id", id).in("label_id", toRemove);
+      const { error: e } = await supabase.from("task_labels").delete().eq("task_id", id).in("label_id", toRemove);
+      labelsFailed ||= !!e;
     }
     if (toAdd.length > 0) {
-      await supabase.from("task_labels").insert(toAdd.map((label_id) => ({ task_id: id, label_id })));
+      const { error: e } = await supabase.from("task_labels").insert(toAdd.map((label_id) => ({ task_id: id, label_id })));
+      labelsFailed ||= !!e;
+    }
+    if (labelsFailed) {
+      // The task fields saved; the label links may be partial. Say so and let
+      // the coalesced refresh pull the true state from the server.
+      setToast(SAVE_FAILED);
+      scheduleRefresh();
     }
 
     // Update local state with re-hydrated joins so the row reflects edits without
@@ -712,7 +752,22 @@ function groupOccurrences(occs: Occurrence[]) {
   today.sort(byDate);
   upcoming.sort(byDate);
 
-  return { overdue, today, upcoming, noDate };
+  // A recurring series expands to one occurrence per day across the whole
+  // horizon, so a single daily task would put ~90 rows into "קרוב". Show each
+  // series once — its next occurrence — and not at all while it already has an
+  // open row today (that row is the actionable one).
+  const openTodaySeries = new Set(
+    today.filter((o) => o.isRecurring && o.status === "open").map((o) => o.task.id)
+  );
+  const seenSeries = new Set<string>();
+  const upcomingCollapsed = upcoming.filter((o) => {
+    if (!o.isRecurring) return true;
+    if (openTodaySeries.has(o.task.id) || seenSeries.has(o.task.id)) return false;
+    seenSeries.add(o.task.id);
+    return true;
+  });
+
+  return { overdue, today, upcoming: upcomingCollapsed, noDate };
 }
 
 // Filter bar: אחריות chips (primary) + a compact owner segmented control
@@ -762,8 +817,6 @@ function FilterBar({
               fontFamily: "var(--font)",
               fontSize: "var(--text-xs)",
               fontWeight: 500,
-              letterSpacing: "0.08em",
-              textTransform: "uppercase",
               color: "var(--text-muted)",
             }}
           >
@@ -913,8 +966,6 @@ function Section({
           fontFamily: "var(--font)",
           fontSize: "var(--text-xs)",
           fontWeight: accent ? 600 : 500,
-          letterSpacing: "0.10em",
-          textTransform: "uppercase",
           color: accent ? "var(--jmh-coral)" : "var(--text-muted)",
           margin: "0 0 var(--sp-2)",
         }}

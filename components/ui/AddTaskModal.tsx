@@ -66,7 +66,7 @@ const inputStyle: React.CSSProperties = {
   border: "1px solid var(--border-strong)",
   borderRadius: "var(--r-md)",
   fontFamily: "var(--font)",
-  fontSize: "var(--text-base)",
+  fontSize: "var(--text-input)", // ≥16px, or iOS zooms on focus
   color: "var(--text-primary)",
   outline: "none",
   boxSizing: "border-box",
@@ -78,8 +78,6 @@ const fieldLabelStyle: React.CSSProperties = {
   fontFamily: "var(--font)",
   fontSize: "var(--text-xs)",
   fontWeight: 500,
-  letterSpacing: "0.08em",
-  textTransform: "uppercase",
   color: "var(--text-muted)",
 };
 
@@ -671,8 +669,6 @@ export default function AddTaskModal({
                   fontFamily: "var(--font)",
                   fontSize: "var(--text-xs)",
                   fontWeight: 500,
-                  letterSpacing: "0.08em",
-                  textTransform: "uppercase",
                   color: "var(--text-muted)",
                 }}
               >
@@ -700,8 +696,6 @@ export default function AddTaskModal({
                 fontFamily: "var(--font)",
                 fontSize: "var(--text-xs)",
                 fontWeight: 500,
-                letterSpacing: "0.08em",
-                textTransform: "uppercase",
                 color: "var(--text-muted)",
               }}
             >

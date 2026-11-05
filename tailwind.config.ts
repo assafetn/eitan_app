@@ -8,8 +8,8 @@ const config: Config = {
   theme: {
     extend: {
       fontFamily: {
-        sans: ["DM Sans", "system-ui", "-apple-system", "sans-serif"],
-        mono: ["JetBrains Mono", "ui-monospace", "Courier New", "monospace"],
+        sans: ["var(--font-rubik)", "system-ui", "-apple-system", "sans-serif"],
+        mono: ["ui-monospace", "Courier New", "monospace"],
       },
       colors: {
         // Primary sky blue scale

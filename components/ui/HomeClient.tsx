@@ -132,9 +132,17 @@ export default function HomeClient({
 
     // Next 3 upcoming open tasks, today onward, soonest first — same resolver and
     // status conditions used elsewhere (no new date logic).
+    // One entry per task: a daily series would otherwise fill all three slots
+    // with the same title on consecutive days.
+    const seenTaskIds = new Set<string>();
     const next3 = resolveOccurrencesInRange(tasks, overrides, today, addDaysISO(today, UPCOMING_HORIZON_DAYS))
       .filter((o) => o.status === "open" && o.date)
       .sort(byDate)
+      .filter((o) => {
+        if (seenTaskIds.has(o.task.id)) return false;
+        seenTaskIds.add(o.task.id);
+        return true;
+      })
       .slice(0, 3);
 
     if (todayList.length > 0) {
@@ -185,21 +193,32 @@ export default function HomeClient({
 
     if (!occ.isRecurring) {
       const newStatus: TaskStatus = occ.status === "open" ? "done" : "open";
+      const completedAt = newStatus === "done" ? new Date().toISOString() : null;
+      const prevStatus = occ.task.status;
+      const prevCompletedAt = occ.task.completed_at;
       setTasks((prev) =>
         prev.map((t) =>
-          t.id === occ.task.id
-            ? { ...t, status: newStatus, completed_at: newStatus === "done" ? new Date().toISOString() : null }
-            : t
+          t.id === occ.task.id ? { ...t, status: newStatus, completed_at: completedAt } : t
         )
       );
-      await supabase
+      const { error } = await supabase
         .from("tasks")
         .update({
           status: newStatus,
-          completed_at: newStatus === "done" ? new Date().toISOString() : null,
+          completed_at: completedAt,
           updated_at: new Date().toISOString(),
         })
         .eq("id", occ.task.id);
+      if (error) {
+        // Revert the optimistic flip and say so — never fail silently.
+        setTasks((prev) =>
+          prev.map((t) =>
+            t.id === occ.task.id ? { ...t, status: prevStatus, completed_at: prevCompletedAt } : t
+          )
+        );
+        setToast(SAVE_FAILED);
+        return;
+      }
       scheduleRefresh();
       return;
     }
@@ -240,7 +259,12 @@ export default function HomeClient({
       if (!ov) return;
       setOverrides((prev) => prev.filter((o) => o.id !== ov.id));
       if (!ov.id.startsWith("temp:")) {
-        await supabase.from("tasks").delete().eq("id", ov.id);
+        const { error } = await supabase.from("tasks").delete().eq("id", ov.id);
+        if (error) {
+          setOverrides((prev) => [...prev, ov]);
+          setToast(SAVE_FAILED);
+          return;
+        }
       }
       scheduleRefresh();
     }
@@ -290,9 +314,11 @@ export default function HomeClient({
       return; // keep the sheet open so the user can retry
     }
     if (data.label_ids.length > 0) {
-      await supabase
+      const { error: labelError } = await supabase
         .from("task_labels")
         .insert(data.label_ids.map((label_id) => ({ task_id: (newTask as { id: string }).id, label_id })));
+      // The task itself saved; flag the partial failure but still close.
+      if (labelError) setToast(SAVE_FAILED);
     }
     setShowAdd(false);
     router.refresh();
@@ -349,8 +375,6 @@ export default function HomeClient({
               fontFamily: "var(--font)",
               fontSize: "var(--text-sm)",
               fontWeight: 500,
-              letterSpacing: "0.10em",
-              textTransform: "uppercase",
               color: "var(--jmh-blue)",
               margin: "0 0 var(--sp-1)",
             }}
@@ -438,8 +462,6 @@ export default function HomeClient({
               fontFamily: "var(--font)",
               fontSize: "var(--text-xs)",
               fontWeight: 500,
-              letterSpacing: "0.10em",
-              textTransform: "uppercase",
               color: "var(--text-muted)",
               margin: "0 0 var(--sp-1)",
             }}
@@ -547,8 +569,6 @@ export default function HomeClient({
               fontFamily: "var(--font)",
               fontSize: "var(--text-xs)",
               fontWeight: 500,
-              letterSpacing: "0.10em",
-              textTransform: "uppercase",
               color: "var(--text-muted)",
               margin: "0 0 var(--sp-2)",
             }}
