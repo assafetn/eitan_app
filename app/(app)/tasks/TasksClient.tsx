@@ -324,14 +324,17 @@ export default function TasksClient({
     return occ.isRecurring || !!occ.task.recurrence_rule;
   }
 
-  // Decide whether a delete needs confirmation. Done single tasks delete
-  // immediately; open singles and ALL recurring tasks confirm first.
-  function requestDelete(occ: Occurrence) {
-    if (!isRecurringOcc(occ) && occ.status === "done") {
-      performDelete(occ);
-      return;
-    }
-    setPendingDelete(occ);
+  // Delete is reached from the edit sheet (not a per-row trash icon) and always
+  // confirms. The sheet edits the series parent / single row, so wrap it as an
+  // occurrence for the shared confirm + performDelete path.
+  function requestDeleteFromSheet(task: Task) {
+    setPendingDelete({
+      key: task.id,
+      task,
+      date: task.due_date,
+      status: task.status,
+      isRecurring: !!task.recurrence_rule,
+    });
   }
 
   // Optimistic delete. Virtual occurrences aren't DB rows, so we always resolve
@@ -557,7 +560,6 @@ export default function TasksClient({
         isRecurring={occ.isRecurring}
         onToggle={() => toggleOccurrence(occ)}
         onEdit={() => setEditingTask(occ.task)}
-        onDelete={() => requestDelete(occ)}
       />
     );
   }
@@ -627,7 +629,7 @@ export default function TasksClient({
           onMouseUp={(e) => { e.currentTarget.style.transform = "translateY(-1px)"; }}
         >
           <Plus size={16} strokeWidth={2} />
-          הוסף משימה
+          הוספת משימה
         </button>
         )}
       </div>
@@ -702,6 +704,7 @@ export default function TasksClient({
           }}
           onAdd={addTask}
           onSave={updateTask}
+          onDelete={editingTask ? () => requestDeleteFromSheet(editingTask) : undefined}
           onCreateResponsibility={createResponsibility}
           onCreateLabel={createLabel}
         />
@@ -719,6 +722,7 @@ export default function TasksClient({
           onConfirm={() => {
             const occ = pendingDelete;
             setPendingDelete(null);
+            setEditingTask(null); // close the sheet the delete came from
             performDelete(occ);
           }}
           onCancel={() => setPendingDelete(null)}

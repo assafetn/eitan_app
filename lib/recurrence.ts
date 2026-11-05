@@ -187,11 +187,30 @@ export function resolveOccurrencesInRange(
  * year; an optional due_time (HH:MM, 24h) is appended when present. Shared by the
  * task rows and the home summary so the date reads identically everywhere.
  */
+const WEEKDAY_NAMES_HE = ["ראשון", "שני", "שלישי", "רביעי", "חמישי", "שישי", "שבת"];
+
+/**
+ * Due date as people say it: "היום", "מחר", "אתמול", "יום ג׳…" names within
+ * the coming week, else "05/11" (plus the year when it isn't this year). The
+ * time, when set, is appended as an isolated LTR run so "18:00" can't be
+ * reordered by the surrounding RTL text.
+ */
 export function formatDueDate(iso: string, time: string | null): string {
-  const [y, m, d] = iso.split("-");
-  let out = `${d}/${m}`;
-  if (y !== String(new Date().getFullYear())) out += `/${y}`;
-  if (time) out += ` ${time.slice(0, 5)}`;
+  const today = todayISO();
+  const diff = Math.round(
+    (Date.parse(`${iso}T00:00:00Z`) - Date.parse(`${today}T00:00:00Z`)) / 86_400_000
+  );
+  let out: string;
+  if (diff === 0) out = "היום";
+  else if (diff === 1) out = "מחר";
+  else if (diff === -1) out = "אתמול";
+  else if (diff > 1 && diff < 7) out = `יום ${WEEKDAY_NAMES_HE[weekdayIndexISO(iso)]}`;
+  else {
+    const [y, m, d] = iso.split("-");
+    out = `${d}/${m}`;
+    if (y !== today.slice(0, 4)) out += `/${y}`;
+  }
+  if (time) out += ` ⁦${time.slice(0, 5)}⁩`;
   return out;
 }
 

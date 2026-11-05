@@ -119,7 +119,7 @@ export default async function LoginPage({
                 margin: 0,
               }}
             >
-              שגיאה בהתחברות. נסה שוב.
+              שגיאה בהתחברות. נסו שוב.
             </p>
           )}
 
@@ -132,7 +132,7 @@ export default async function LoginPage({
               lineHeight: 1.5,
             }}
           >
-            התחבר עם חשבון Google המשפחתי שלך.
+            התחברו עם חשבון ה-Google המשפחתי שלכם.
           </p>
 
           <LoginButton />

@@ -56,7 +56,7 @@ export default function NoAccessPage() {
           margin: "0 0 var(--sp-6)",
         }}
       >
-        חשבון זה אינו מורשה להשתמש ב-{APP_NAME}. אנא פנה לאסף.
+        חשבון זה אינו מורשה להשתמש ב-{APP_NAME}. אנא פנו לאסף.
       </p>
 
       <Link

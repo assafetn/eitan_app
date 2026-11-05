@@ -19,12 +19,13 @@ import { useCoalescedRefresh } from "@/lib/useCoalescedRefresh";
 import TaskRow from "@/components/ui/TaskRow";
 import AddTaskModal from "@/components/ui/AddTaskModal";
 import Toast from "@/components/ui/Toast";
+import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import { CircleCheck, Plus, Settings } from "lucide-react";
 
 const SAVE_FAILED = "השמירה נכשלה, נסו שוב";
+const DELETE_FAILED = "המחיקה נכשלה, נסו שוב";
 
 interface Props {
-  appName: string;
   firstName: string | null;
   initialTasks: Task[];
   initialOverrides: OccurrenceOverride[];
@@ -68,7 +69,6 @@ function summarySentence(todayCount: number, overdueCount: number): string {
 }
 
 export default function HomeClient({
-  appName,
   firstName,
   initialTasks,
   initialOverrides,
@@ -86,6 +86,9 @@ export default function HomeClient({
   // Add-task sheet + the lists it needs. Held in state so an inline-created
   // responsibility/label appears immediately in the open sheet.
   const [showAdd, setShowAdd] = useState(false);
+  // Edit sheet (row tap) + its delete confirmation.
+  const [editingTask, setEditingTask] = useState<Task | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const [responsibilities, setResponsibilities] = useState<Responsibility[]>(initialResponsibilities);
   const [labels, setLabels] = useState<Label[]>(initialLabels);
 
@@ -135,18 +138,22 @@ export default function HomeClient({
     // One entry per task: a daily series would otherwise fill all three slots
     // with the same title on consecutive days.
     const seenTaskIds = new Set<string>();
-    const next3 = resolveOccurrencesInRange(tasks, overrides, today, addDaysISO(today, UPCOMING_HORIZON_DAYS))
+    const next3All = resolveOccurrencesInRange(tasks, overrides, today, addDaysISO(today, UPCOMING_HORIZON_DAYS))
       .filter((o) => o.status === "open" && o.date)
       .sort(byDate)
       .filter((o) => {
         if (seenTaskIds.has(o.task.id)) return false;
         seenTaskIds.add(o.task.id);
         return true;
-      })
-      .slice(0, 3);
+      });
+    // The summary's "בקרוב" shouldn't repeat rows the list below already shows.
+    const notIn = (rows: ResolvedOccurrence[]) => {
+      const shown = new Set(rows.map((o) => o.task.id));
+      return next3All.filter((o) => !shown.has(o.task.id)).slice(0, 3);
+    };
 
     if (todayList.length > 0) {
-      return { mode: "today", list: todayList, todayCount, overdueCount, next3 };
+      return { mode: "today", list: todayList, todayCount, overdueCount, next3: notIn(todayList) };
     }
 
     // Fallback: the soonest upcoming day that has open tasks.
@@ -160,15 +167,16 @@ export default function HomeClient({
       .sort(byDate);
 
     if (upcoming.length === 0) {
-      return { mode: "empty", list: [], todayCount, overdueCount, next3 };
+      return { mode: "empty", list: [], todayCount, overdueCount, next3: notIn([]) };
     }
     const soonest = upcoming[0].date;
+    const soonestList = upcoming.filter((o) => o.date === soonest);
     return {
       mode: "upcoming",
-      list: upcoming.filter((o) => o.date === soonest),
+      list: soonestList,
       todayCount,
       overdueCount,
-      next3,
+      next3: notIn(soonestList),
     };
   }, [tasks, overrides, today]);
 
@@ -347,6 +355,66 @@ export default function HomeClient({
     return label;
   }
 
+  // Save edits from the sheet. Home derives everything from server data, so on
+  // success it refreshes rather than patching local state; on failure the sheet
+  // stays open with the edits and the toast explains.
+  async function saveTask(data: Parameters<typeof addTask>[0]) {
+    if (!editingTask) return;
+    const supabase = createClient();
+    const id = editingTask.id;
+    const { error } = await supabase
+      .from("tasks")
+      .update({
+        title: data.title,
+        notes: data.notes || null,
+        due_date: data.due_date || null,
+        due_time: data.due_time,
+        assignee_id: data.assignee_id || null,
+        child_id: data.child_id || null,
+        responsibility_id: data.responsibility_id || null,
+        recurrence_rule: data.recurrence_rule,
+        priority: data.priority,
+        is_shared: data.is_shared,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", id);
+    if (error) {
+      setToast(SAVE_FAILED);
+      return;
+    }
+    const prevIds = new Set((editingTask.labels ?? []).map((l) => l.id));
+    const nextIds = new Set(data.label_ids);
+    const toRemove = [...prevIds].filter((lid) => !nextIds.has(lid));
+    const toAdd = data.label_ids.filter((lid) => !prevIds.has(lid));
+    let labelsFailed = false;
+    if (toRemove.length > 0) {
+      const { error: e } = await supabase.from("task_labels").delete().eq("task_id", id).in("label_id", toRemove);
+      labelsFailed ||= !!e;
+    }
+    if (toAdd.length > 0) {
+      const { error: e } = await supabase.from("task_labels").insert(toAdd.map((label_id) => ({ task_id: id, label_id })));
+      labelsFailed ||= !!e;
+    }
+    if (labelsFailed) setToast(SAVE_FAILED);
+    setEditingTask(null);
+    router.refresh();
+  }
+
+  async function deleteEditingTask() {
+    if (!editingTask) return;
+    const id = editingTask.recurrence_parent_id ?? editingTask.id;
+    setConfirmDelete(false);
+    const supabase = createClient();
+    const { error } = await supabase.from("tasks").delete().eq("id", id);
+    if (error) {
+      setToast(DELETE_FAILED);
+      return; // sheet stays open
+    }
+    setEditingTask(null);
+    setTasks((prev) => prev.filter((t) => t.id !== id));
+    router.refresh();
+  }
+
   const sectionTitle = mode === "upcoming" ? "הקרוב" : "להיום";
 
   return (
@@ -370,17 +438,6 @@ export default function HomeClient({
         }}
       >
         <div>
-          <p
-            style={{
-              fontFamily: "var(--font)",
-              fontSize: "var(--text-sm)",
-              fontWeight: 500,
-              color: "var(--jmh-blue)",
-              margin: "0 0 var(--sp-1)",
-            }}
-          >
-            {appName}
-          </p>
           <h1
             suppressHydrationWarning
             style={{
@@ -577,38 +634,54 @@ export default function HomeClient({
           </p>
           <div style={{ display: "flex", flexDirection: "column", gap: "var(--sp-2)" }}>
             {list.map((occ) => (
-              // Tapping the row body opens the full משימות tab; the toggle circle
-              // inside stops propagation, so it still completes in place.
-              <div
+              // Same as the משימות list: tapping the row body opens the edit
+              // sheet; the toggle circle stops propagation and completes in place.
+              <TaskRow
                 key={occ.key}
-                onClick={() => router.push("/tasks")}
-                role="link"
-                aria-label={`פתח משימות: ${occ.task.title}`}
-              >
-                <TaskRow
-                  task={occ.task}
-                  adults={adults}
-                  date={occ.date}
-                  status={occ.status}
-                  isRecurring={occ.isRecurring}
-                  onToggle={() => toggleOccurrence(occ)}
-                />
-              </div>
+                task={occ.task}
+                adults={adults}
+                date={occ.date}
+                status={occ.status}
+                isRecurring={occ.isRecurring}
+                onToggle={() => toggleOccurrence(occ)}
+                onEdit={() => setEditingTask(occ.task)}
+              />
             ))}
           </div>
         </>
       )}
 
-      {showAdd && (
+      {(showAdd || editingTask) && (
         <AddTaskModal
+          key={editingTask?.id ?? "new"}
           members={adults}
           childMembers={childMembers}
           responsibilities={responsibilities}
           labels={labels}
-          onClose={() => setShowAdd(false)}
+          editingTask={editingTask}
+          onClose={() => {
+            setShowAdd(false);
+            setEditingTask(null);
+          }}
           onAdd={addTask}
+          onSave={saveTask}
+          onDelete={editingTask ? () => setConfirmDelete(true) : undefined}
           onCreateResponsibility={createResponsibility}
           onCreateLabel={createLabel}
+        />
+      )}
+
+      {confirmDelete && editingTask && (
+        <ConfirmDialog
+          title="מחיקת משימה"
+          message={
+            editingTask.recurrence_rule
+              ? "מחיקת המשימה תמחק את כל המופעים החוזרים שלה. להמשיך?"
+              : "המשימה תימחק לצמיתות. להמשיך?"
+          }
+          confirmLabel="מחיקה"
+          onConfirm={deleteEditingTask}
+          onCancel={() => setConfirmDelete(false)}
         />
       )}
 

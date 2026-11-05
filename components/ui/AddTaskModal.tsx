@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { FamilyMember, Label, RecurrenceRule, Responsibility, Task, TaskPriority, Weekday } from "@/lib/types";
 import { addDaysISO, todayISO, WEEKDAY_KEYS, WEEKDAY_LETTERS } from "@/lib/recurrence";
-import { Calendar, Check, Plus, X } from "lucide-react";
+import { Calendar, Check, ChevronDown, Plus, Trash2, X } from "lucide-react";
 
 interface Props {
   members: FamilyMember[];
@@ -44,6 +44,9 @@ interface Props {
     priority: TaskPriority;
     is_shared: boolean;
   }) => Promise<void>;
+  /** Edit mode only: shows a "מחיקה" button in the footer. The parent owns the
+   *  confirmation + delete. */
+  onDelete?: () => void;
   /** Inline-create a responsibility (name + owner). Returns the new row, or
    *  null on failure. The parent persists it and adds it to the list. */
   onCreateResponsibility: (name: string, ownerId: string) => Promise<Responsibility | null>;
@@ -100,6 +103,7 @@ export default function AddTaskModal({
   editingTask,
   onAdd,
   onSave,
+  onDelete,
   onCreateResponsibility,
   onCreateLabel,
 }: Props) {
@@ -156,6 +160,59 @@ export default function AddTaskModal({
     )
   );
   const [submitting, setSubmitting] = useState(false);
+
+  // Progressive disclosure: the quick path (title, date, time, who, urgent) is
+  // always visible; notes / responsibility / labels / child / recurrence sit
+  // behind "פרטים נוספים". Opens by default when editing a task that already
+  // uses any of them, so nothing set is hidden.
+  const extrasCount =
+    (notes.trim() ? 1 : 0) +
+    (responsibilityId ? 1 : 0) +
+    (labelIds.size > 0 ? 1 : 0) +
+    (childId ? 1 : 0) +
+    (recurrence !== "none" ? 1 : 0);
+  const [showMore, setShowMore] = useState(() => isEditing && extrasCount > 0);
+
+  // Dialog behaviour: Escape closes, Tab stays inside the sheet, and focus goes
+  // back to whatever opened it on close.
+  const sheetRef = useRef<HTMLDivElement>(null);
+  // Parents pass an inline onClose; read it through a ref so this effect runs
+  // once per open (re-running would yank focus back to the opener mid-edit).
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+  useEffect(() => {
+    const opener = document.activeElement as HTMLElement | null;
+    function onKey(e: KeyboardEvent) {
+      // A dialog stacked on top (the delete confirmation) owns the keyboard.
+      if (document.querySelectorAll('[aria-modal="true"]').length > 1) return;
+      if (e.key === "Escape") {
+        e.preventDefault();
+        onCloseRef.current();
+        return;
+      }
+      if (e.key !== "Tab" || !sheetRef.current) return;
+      const focusables = Array.from(
+        sheetRef.current.querySelectorAll<HTMLElement>(
+          'button:not([disabled]), input:not([disabled]):not([tabindex="-1"]), textarea, select, [href]'
+        )
+      ).filter((el) => el.offsetParent !== null);
+      if (focusables.length === 0) return;
+      const first = focusables[0];
+      const last = focusables[focusables.length - 1];
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    }
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      opener?.focus?.();
+    };
+  }, []);
 
   const weeklyNeedsDays = recurrence === "weekly" && weekDays.size === 0;
   const canSubmit = !!title.trim() && !weeklyNeedsDays && !submitting;
@@ -265,7 +322,11 @@ export default function AddTaskModal({
           footer (pinned, clears the iOS home indicator). Height is capped with a
           dvh max-height (vh fallback) via the .atm-sheet rule. */}
       <div
+        ref={sheetRef}
         className="atm-sheet"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="atm-title"
         style={{
           position: "fixed",
           bottom: 0,
@@ -311,6 +372,7 @@ export default function AddTaskModal({
             }}
           >
             <h2
+              id="atm-title"
               style={{
                 fontFamily: "var(--font)",
                 fontSize: "var(--text-lg)",
@@ -378,32 +440,8 @@ export default function AddTaskModal({
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             required
+            aria-label="שם המשימה"
             style={{ ...inputStyle, flexShrink: 0 }}
-            onFocus={(e) => {
-              e.target.style.borderColor = "var(--jmh-blue-60)";
-              e.target.style.boxShadow = "0 0 0 3px var(--jmh-blue-30)";
-            }}
-            onBlur={(e) => {
-              e.target.style.borderColor = "var(--border-strong)";
-              e.target.style.boxShadow = "none";
-            }}
-          />
-
-          {/* Notes — multi-line. flexShrink:0 keeps it from being squeezed to a
-              single line by the flex-column body; resize:vertical lets the user
-              grow it without ever breaking the 390px width. */}
-          <textarea
-            placeholder="הערות (אופציונלי)"
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-            rows={3}
-            style={{
-              ...inputStyle,
-              flexShrink: 0,
-              minHeight: 80,
-              resize: "vertical",
-              lineHeight: 1.5,
-            }}
             onFocus={(e) => {
               e.target.style.borderColor = "var(--jmh-blue-60)";
               e.target.style.boxShadow = "0 0 0 3px var(--jmh-blue-30)";
@@ -429,7 +467,7 @@ export default function AddTaskModal({
               ))}
               <button
                 type="button"
-                aria-label="בחר תאריך אחר"
+                aria-label="בחירת תאריך אחר"
                 onClick={() => openNativePicker(dateInputRef)}
                 style={{
                   display: "inline-flex",
@@ -536,32 +574,35 @@ export default function AddTaskModal({
             />
           </div>
 
-          {/* Assignee — the empty "משותף" option means shared (both adults); a
-              named option means that single adult. This drives is_shared on save. */}
-          <select
-            value={assigneeId ?? ""}
-            onChange={(e) => setAssigneeId(e.target.value || null)}
-            style={{ ...inputStyle, appearance: "none", cursor: "pointer", flexShrink: 0 }}
-            onFocus={(e) => {
-              e.target.style.borderColor = "var(--jmh-blue-60)";
-              e.target.style.boxShadow = "0 0 0 3px var(--jmh-blue-30)";
-            }}
-            onBlur={(e) => {
-              e.target.style.borderColor = "var(--border-strong)";
-              e.target.style.boxShadow = "none";
-            }}
+          {/* Assignee — "משותף" means shared (both adults); a name means that
+              single adult. This drives is_shared on save. Two adults → a one-tap
+              choice instead of a native select. */}
+          <div
+            role="group"
+            aria-labelledby="atm-who"
+            style={{ display: "flex", flexDirection: "column", gap: "var(--sp-2)", flexShrink: 0 }}
           >
-            <option value="">משותף</option>
-            {members.map((m) => (
-              <option key={m.id} value={m.id}>
-                {m.name}
-              </option>
-            ))}
-          </select>
+            <span id="atm-who" style={fieldLabelStyle}>מי אחראי</span>
+            <div style={{ display: "flex", gap: "var(--sp-2)", flexWrap: "wrap" }}>
+              <DateChip label="משותף" active={assigneeId === null} onClick={() => setAssigneeId(null)} />
+              {members.map((m) => (
+                <DateChip
+                  key={m.id}
+                  label={m.name}
+                  active={assigneeId === m.id}
+                  onClick={() => setAssigneeId(m.id)}
+                />
+              ))}
+            </div>
+          </div>
 
           {/* Urgency — maps to tasks.priority ('high' when on, else 'normal'). */}
-          <div style={{ display: "flex", flexDirection: "column", gap: "var(--sp-2)", flexShrink: 0 }}>
-            <span style={fieldLabelStyle}>עדיפות</span>
+          <div
+            role="group"
+            aria-labelledby="atm-priority"
+            style={{ display: "flex", flexDirection: "column", gap: "var(--sp-2)", flexShrink: 0 }}
+          >
+            <span id="atm-priority" style={fieldLabelStyle}>עדיפות</span>
             <div style={{ display: "flex", gap: "var(--sp-2)", flexWrap: "wrap" }}>
               <button
                 type="button"
@@ -590,6 +631,72 @@ export default function AddTaskModal({
               </button>
             </div>
           </div>
+
+          {/* Disclosure for the less-used fields. Shows how many are set while
+              collapsed, so a filled-in field is never silently hidden. */}
+          <button
+            type="button"
+            onClick={() => setShowMore((v) => !v)}
+            aria-expanded={showMore}
+            aria-controls="atm-more"
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "var(--sp-2)",
+              minHeight: 44,
+              padding: 0,
+              background: "transparent",
+              border: "none",
+              color: "var(--jmh-blue)",
+              fontFamily: "var(--font)",
+              fontSize: "var(--text-sm)",
+              fontWeight: 600,
+              cursor: "pointer",
+              flexShrink: 0,
+            }}
+          >
+            <ChevronDown
+              size={16}
+              strokeWidth={2}
+              style={{
+                transform: showMore ? "rotate(180deg)" : "none",
+                transition: `transform var(--dur-base) var(--ease-out)`,
+              }}
+            />
+            {showMore ? "פחות פרטים" : "פרטים נוספים"}
+            {!showMore && extrasCount > 0 && (
+              <span style={{ color: "var(--text-muted)", fontWeight: 400 }}>
+                ({extrasCount === 1 ? "שדה אחד מלא" : `${extrasCount} שדות מלאים`})
+              </span>
+            )}
+          </button>
+
+          {showMore && (
+          <div id="atm-more" style={{ display: "flex", flexDirection: "column", gap: "var(--sp-4)", flexShrink: 0 }}>
+
+          {/* Notes — multi-line; resize:vertical lets the user grow it. */}
+          <textarea
+            placeholder="הערות"
+            aria-label="הערות"
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            rows={3}
+            style={{
+              ...inputStyle,
+              flexShrink: 0,
+              minHeight: 80,
+              resize: "vertical",
+              lineHeight: 1.5,
+            }}
+            onFocus={(e) => {
+              e.target.style.borderColor = "var(--jmh-blue-60)";
+              e.target.style.boxShadow = "0 0 0 3px var(--jmh-blue-30)";
+            }}
+            onBlur={(e) => {
+              e.target.style.borderColor = "var(--border-strong)";
+              e.target.style.boxShadow = "none";
+            }}
+          />
 
           {/* Responsibility selector (single-select, optional) + inline create */}
           <div style={{ display: "flex", flexDirection: "column", gap: "var(--sp-2)", flexShrink: 0 }}>
@@ -709,8 +816,10 @@ export default function AddTaskModal({
                     key={o.value}
                     type="button"
                     onClick={() => setRecurrence(o.value)}
+                    aria-pressed={active}
                     style={{
-                      padding: "6px 14px",
+                      minHeight: 44,
+                      padding: "0 16px",
                       borderRadius: "var(--r-full)",
                       border: `1px solid ${active ? "var(--jmh-blue-30)" : "var(--border-strong)"}`,
                       background: active ? "var(--jmh-blue-05)" : "var(--surface)",
@@ -730,7 +839,7 @@ export default function AddTaskModal({
 
             {/* Weekly day pickers — RTL row, week starts Sunday (rightmost) */}
             {recurrence === "weekly" && (
-              <div style={{ display: "flex", gap: "var(--sp-2)", marginTop: "var(--sp-1)" }}>
+              <div style={{ display: "flex", gap: 6, marginTop: "var(--sp-1)" }}>
                 {WEEKDAY_KEYS.map((day) => {
                   const active = weekDays.has(day);
                   return (
@@ -740,8 +849,11 @@ export default function AddTaskModal({
                       onClick={() => toggleWeekday(day)}
                       aria-pressed={active}
                       style={{
-                        width: 36,
-                        height: 36,
+                        // Seven equal columns: ~44px each at 390px (was a fixed 36).
+                        flex: "1 1 0",
+                        minWidth: 0,
+                        maxWidth: 52,
+                        height: 44,
                         borderRadius: "var(--r-full)",
                         border: `1px solid ${active ? "var(--jmh-blue)" : "var(--border-strong)"}`,
                         background: active ? "var(--jmh-blue)" : "var(--surface)",
@@ -776,6 +888,9 @@ export default function AddTaskModal({
           </div>
 
           </div>
+          )}
+
+          </div>
 
           {/* FOOTER zone — flex:0 0 auto; pinned. padding-bottom clears the iOS
               home indicator via the safe-area inset. */}
@@ -786,12 +901,46 @@ export default function AddTaskModal({
               borderTop: "1px solid var(--border)",
               padding: "var(--sp-4) var(--sp-5)",
               paddingBottom: "max(16px, env(safe-area-inset-bottom))",
+              display: "flex",
+              alignItems: "center",
+              gap: "var(--sp-3)",
             }}
           >
+            {/* Delete lives here (edit mode only), not as a trash icon on every
+                row: deliberate, and away from the row's main tap area. Sits at
+                the inline-end, visually subordinate to the primary save. */}
+            {isEditing && onDelete && (
+              <button
+                type="button"
+                onClick={onDelete}
+                style={{
+                  order: 2,
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: "var(--sp-1)",
+                  minHeight: 48,
+                  padding: "0 var(--sp-4)",
+                  background: "transparent",
+                  color: "var(--jmh-coral)",
+                  border: "1px solid color-mix(in oklch, var(--jmh-coral) 35%, transparent)",
+                  borderRadius: "var(--r-full)",
+                  fontFamily: "var(--font)",
+                  fontWeight: 500,
+                  fontSize: "var(--text-sm)",
+                  cursor: "pointer",
+                  flexShrink: 0,
+                }}
+              >
+                <Trash2 size={15} strokeWidth={2} />
+                מחיקה
+              </button>
+            )}
             <button
               type="submit"
               disabled={!canSubmit}
               style={{
+                flex: 1,
                 width: "100%",
                 padding: "14px var(--sp-6)",
                 background: canSubmit ? "var(--jmh-blue)" : "var(--jmh-blue-30)",
@@ -806,7 +955,7 @@ export default function AddTaskModal({
                 transition: `background var(--dur-fast) var(--ease-out)`,
               }}
             >
-              {submitting ? "שומר..." : isEditing ? "שמור שינויים" : "הוסף משימה"}
+              {submitting ? "שומר..." : isEditing ? "שמירת שינויים" : "הוספת משימה"}
             </button>
           </div>
         </form>
@@ -827,7 +976,8 @@ function AddChip({ label, onClick }: { label: string; onClick: () => void }) {
         display: "inline-flex",
         alignItems: "center",
         gap: "var(--sp-1)",
-        padding: "6px 14px",
+        minHeight: 44,
+        padding: "0 16px",
         borderRadius: "var(--r-full)",
         border: "1px dashed var(--border-strong)",
         background: "transparent",
@@ -948,7 +1098,7 @@ function InlineCreate({
           }}
         >
           <Check size={15} strokeWidth={2} />
-          {busy ? "שומר..." : "הוסף"}
+          {busy ? "שומר..." : "הוספה"}
         </button>
         <button
           type="button"
@@ -1050,11 +1200,13 @@ function ChildPill({
     <button
       type="button"
       onClick={onClick}
+      aria-pressed={active}
       style={{
         display: "inline-flex",
         alignItems: "center",
         gap: "var(--sp-1)",
-        padding: "6px 14px",
+        minHeight: 44,
+        padding: "0 16px",
         borderRadius: "var(--r-full)",
         border: `1px solid ${active ? "var(--jmh-blue-30)" : "var(--border-strong)"}`,
         background: active ? "var(--jmh-blue-05)" : "var(--surface)",

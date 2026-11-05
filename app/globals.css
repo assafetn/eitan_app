@@ -120,7 +120,7 @@
   --font-mono:       ui-monospace, 'Courier New', monospace;
 
   /* TYPE SCALE */
-  --text-xs:   11px;
+  --text-xs:   12px; /* floor for any text — 11px metadata was too small to glance at */
   --text-sm:   13px;
   --text-base: 15px;
   --text-md:   17px;
@@ -202,21 +202,57 @@ button {
   color-scheme: inherit;
 }
 
-/* Status strip utility used on task rows */
-.task-strip {
+/* Task row. Hover lift only on devices that really hover (on phones a sticky
+   :hover would leave rows "lifted" after a tap); press feedback via :active
+   works everywhere. Transform + shadow only — no layout shift. */
+.task-row {
   position: relative;
-  overflow: hidden;
+  transition: box-shadow var(--dur-fast) var(--ease-out),
+              transform var(--dur-fast) var(--ease-out);
 }
-.task-strip::before {
-  content: '';
-  position: absolute;
-  inset-inline-start: 0;
-  top: 0;
-  bottom: 0;
-  width: 3px;
-  background: var(--strip-color, var(--border-strong));
-  border-start-start-radius: var(--r-md);
-  border-end-start-radius: var(--r-md);
+@media (hover: hover) {
+  .task-row--tappable:hover {
+    box-shadow: var(--shadow-md);
+    transform: translateY(-1px);
+  }
+}
+.task-row--tappable:active {
+  transform: scale(0.985);
+  box-shadow: var(--shadow-sm);
+}
+
+/* Tap feedback for buttons and links across the app — a quick dip in opacity,
+   no size change. Inline styles don't set opacity on active, so this applies. */
+button:not(:disabled),
+a {
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+button:not(:disabled):active,
+a:active {
+  opacity: 0.7;
+  transition: opacity 0s;
+}
+
+/* Keyboard focus. Visible ring for keyboard users only (not on tap). Inputs
+   keep their own focus glow, so they're excluded. */
+:focus-visible {
+  outline: 2px solid var(--jmh-blue);
+  outline-offset: 2px;
+}
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  outline: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .task-row,
+  .task-row--tappable:hover,
+  .task-row--tappable:active {
+    transition: none;
+    transform: none;
+  }
 }
 
 @keyframes pulse-dot {

@@ -3,7 +3,7 @@
 import type { FamilyMember, Label, Responsibility, Task, TaskStatus } from "@/lib/types";
 import { formatDueDate, recurrenceLabel, todayISO } from "@/lib/recurrence";
 import { getTaskPeople } from "@/lib/taskPeople";
-import { Calendar, Check, Repeat, Trash2, User } from "lucide-react";
+import { Calendar, Check, Repeat, User } from "lucide-react";
 
 // At 390px we show at most this many label chips, then a "+N" overflow chip,
 // so a heavily-labelled task never blows the row height out.
@@ -20,33 +20,22 @@ interface Props {
   /** Whether this row is an occurrence of a recurring series. */
   isRecurring: boolean;
   onToggle: () => void;
-  /** Optional. When provided, renders a trash button that requests deletion.
-   *  The list view passes it; the calendar opts out (rows are cramped there). */
-  onDelete?: () => void;
   /** Tapping the row body (not the toggle/delete targets) opens edit. */
   onEdit?: () => void;
 }
 
-export default function TaskRow({ task, adults, date, status, isRecurring, onToggle, onDelete, onEdit }: Props) {
+export default function TaskRow({ task, adults, date, status, isRecurring, onToggle, onEdit }: Props) {
   const isDone = status === "done";
   const isUrgent = date ? date < todayISO() : false;
   // High-priority ("דחוף") signalling: a coral background tint + an explicit
   // text chip (never colour alone). Completed rows opt out entirely — the
-  // dimmed done styling takes over. Independent of `isUrgent`/overdue, so an
-  // overdue high-priority task keeps both its coral edge strip and this tint.
+  // dimmed done styling takes over. Overdue is signalled separately (coral
+  // date + circle, and the list's "באיחור" group) — no side stripe.
   const isHighPriority = task.priority === "high" && !isDone;
 
   const responsibility = task.responsibility ?? null;
   const labels = task.labels ?? [];
   const hasBadges = !!responsibility || labels.length > 0;
-
-  const stripColor = isDone
-    ? "var(--jmh-sage)"
-    : isUrgent
-    ? "var(--jmh-coral)"
-    : task.priority === "high"
-    ? "var(--jmh-gold)"
-    : "var(--border-strong)";
 
   // The single derived "who is on this task" concept: shared → both adults, else
   // the assignee, else nobody. One field, rendered from one User icon.
@@ -56,31 +45,23 @@ export default function TaskRow({ task, adults, date, status, isRecurring, onTog
 
   return (
     <div
-      className="task-strip"
+      className={onEdit ? "task-row task-row--tappable" : "task-row"}
       onClick={onEdit}
       style={{
-        "--strip-color": stripColor,
         background: isHighPriority
           ? "color-mix(in oklch, var(--jmh-coral) 8%, var(--surface))"
           : "var(--surface)",
         border: "1px solid var(--border)",
         borderRadius: "var(--r-md)",
-        padding: "12px 14px 12px 17px",
+        padding: "12px 14px",
         display: "flex",
         alignItems: "center",
         gap: "var(--sp-3)",
         boxShadow: "var(--shadow-sm)",
-        cursor: "pointer",
-        transition: `box-shadow var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out)`,
+        cursor: onEdit ? "pointer" : "default",
         opacity: isDone ? 0.6 : 1,
-      } as React.CSSProperties}
-      onMouseEnter={(e) => {
-        e.currentTarget.style.boxShadow = "var(--shadow-md)";
-        e.currentTarget.style.transform = "translateY(-1px)";
-      }}
-      onMouseLeave={(e) => {
-        e.currentTarget.style.boxShadow = "var(--shadow-sm)";
-        e.currentTarget.style.transform = "translateY(0)";
+        // hover lift / press scale live in globals.css (.task-row) so they can be
+        // gated to real hover devices and to :active for touch.
       }}
     >
       {/* Toggle circle. The visible circle stays 20px, but the button pads out to
@@ -88,7 +69,7 @@ export default function TaskRow({ task, adults, date, status, isRecurring, onTog
           the row layout and its neighbours don't shift at 390px RTL. */}
       <button
         onClick={(e) => { e.stopPropagation(); onToggle(); }}
-        aria-label={isDone ? "סמן כפתוח" : "סמן כהושלם"}
+        aria-label={isDone ? "סימון כפתוחה" : "סימון כהושלמה"}
         style={{
           padding: 12, // 12 + 20 circle + 12 = 44px hit area (box-sizing: border-box)
           margin: -12, // neutralises the padding so the footprint stays 20px
@@ -134,7 +115,7 @@ export default function TaskRow({ task, adults, date, status, isRecurring, onTog
           <span
             style={{
               fontFamily: "var(--font)",
-              fontSize: "var(--text-sm)",
+              fontSize: "var(--text-base)", // the row's anchor — readable at a glance
               fontWeight: 500,
               color: isDone ? "var(--text-muted)" : "var(--text-primary)",
               textDecoration: isDone ? "line-through" : "none",
@@ -158,19 +139,21 @@ export default function TaskRow({ task, adults, date, status, isRecurring, onTog
                 alignItems: "center",
                 gap: 4,
                 fontFamily: "var(--font)",
-                fontSize: 11,
+                fontSize: "var(--text-xs)",
                 fontWeight: isUrgent && !isDone ? 500 : 400,
                 color: isUrgent && !isDone ? "var(--jmh-coral)" : "var(--text-muted)",
               }}
             >
-              <Calendar size={11} strokeWidth={2} style={{ flexShrink: 0 }} />
-              {formatDueDate(date, task.due_time)}
+              <Calendar size={12} strokeWidth={2} style={{ flexShrink: 0 }} />
+              {/* Relative to the viewer's "today", which can differ from the
+                  server's clock around midnight. */}
+              <span suppressHydrationWarning>{formatDueDate(date, task.due_time)}</span>
             </span>
           ) : null;
 
           const recurrenceNode =
             isRecurring && task.recurrence_rule ? (
-              <span style={{ fontFamily: "var(--font)", fontSize: 11, color: "var(--text-muted)" }}>
+              <span style={{ fontFamily: "var(--font)", fontSize: "var(--text-xs)", color: "var(--text-muted)" }}>
                 {recurrenceLabel(task.recurrence_rule)}
               </span>
             ) : null;
@@ -184,11 +167,11 @@ export default function TaskRow({ task, adults, date, status, isRecurring, onTog
                 alignItems: "center",
                 gap: 4,
                 fontFamily: "var(--font)",
-                fontSize: 11,
+                fontSize: "var(--text-xs)",
                 color: "var(--text-muted)",
               }}
             >
-              <User size={11} strokeWidth={2} style={{ flexShrink: 0 }} />
+              <User size={12} strokeWidth={2} style={{ flexShrink: 0 }} />
               {peopleNames}
             </span>
           ) : null;
@@ -200,7 +183,7 @@ export default function TaskRow({ task, adults, date, status, isRecurring, onTog
                 alignItems: "center",
                 gap: "var(--sp-1)",
                 fontFamily: "var(--font)",
-                fontSize: 11,
+                fontSize: "var(--text-xs)",
                 color: "var(--text-muted)",
               }}
             >
@@ -230,7 +213,7 @@ export default function TaskRow({ task, adults, date, status, isRecurring, onTog
                 background: "color-mix(in oklch, var(--jmh-coral) 14%, var(--surface))",
                 border: "1px solid color-mix(in oklch, var(--jmh-coral) 30%, transparent)",
                 fontFamily: "var(--font)",
-                fontSize: 11,
+                fontSize: "var(--text-xs)",
                 fontWeight: 600,
                 color: "var(--jmh-coral)",
                 flexShrink: 0,
@@ -248,7 +231,7 @@ export default function TaskRow({ task, adults, date, status, isRecurring, onTog
               {urgentNode}
               {items.map((node, i) => (
                 <span key={i} style={{ display: "inline-flex", alignItems: "center", gap: "var(--sp-2)" }}>
-                  {i > 0 && <span style={{ color: "var(--border-strong)", fontSize: 11 }}>·</span>}
+                  {i > 0 && <span style={{ color: "var(--border-strong)", fontSize: "var(--text-xs)" }}>·</span>}
                   {node}
                 </span>
               ))}
@@ -277,40 +260,6 @@ export default function TaskRow({ task, adults, date, status, isRecurring, onTog
         )}
       </div>
 
-      {/* Right cluster: optional series delete */}
-      {onDelete && (
-        <button
-          onClick={(e) => { e.stopPropagation(); onDelete(); }}
-          aria-label="מחיקת משימה"
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            justifyContent: "center",
-            width: 28,
-            height: 28,
-            padding: 8, // 8 + 28 + 8 = 44px hit area
-            margin: -8, // keep the 28px visual footprint (row layout unchanged)
-            boxSizing: "content-box",
-            borderRadius: "var(--r-sm)",
-            background: "transparent",
-            border: "none",
-            color: "var(--text-muted)",
-            cursor: "pointer",
-            flexShrink: 0,
-            transition: `background var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out)`,
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.background = "var(--jmh-coral-bg)";
-            e.currentTarget.style.color = "var(--jmh-coral)";
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.background = "transparent";
-            e.currentTarget.style.color = "var(--text-muted)";
-          }}
-        >
-          <Trash2 size={14} strokeWidth={2} />
-        </button>
-      )}
     </div>
   );
 }
@@ -336,7 +285,7 @@ function ResponsibilityBadge({ responsibility }: { responsibility: Responsibilit
       <span
         style={{
           fontFamily: "var(--font)",
-          fontSize: 11,
+          fontSize: "var(--text-xs)",
           fontWeight: 500,
           color: "var(--text-secondary)",
           whiteSpace: "nowrap",
@@ -371,7 +320,7 @@ function LabelChip({ label }: { label: Label }) {
       <span
         style={{
           fontFamily: "var(--font)",
-          fontSize: 10,
+          fontSize: "var(--text-xs)",
           color: "var(--text-muted)",
           whiteSpace: "nowrap",
           overflow: "hidden",
@@ -395,7 +344,7 @@ function MoreChip({ count }: { count: number }) {
         background: "var(--surface)",
         border: "1px solid var(--border)",
         fontFamily: "var(--font)",
-        fontSize: 10,
+        fontSize: "var(--text-xs)",
         color: "var(--text-muted)",
         flexShrink: 0,
       }}

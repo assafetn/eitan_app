@@ -239,7 +239,7 @@ export default function SettingsClient({ initialResponsibilities, initialLabels,
         <ResponsibilityForm
           key={`resp-add-${respFormKey}`}
           adults={adults}
-          submitLabel="הוסף אחריות"
+          submitLabel="הוספת אחריות"
           onSubmit={createResponsibility}
         />
 
@@ -272,7 +272,7 @@ export default function SettingsClient({ initialResponsibilities, initialLabels,
 
       {/* ── Section B: labels ── */}
       <Section title="תוויות" subtitle="תגיות חופשיות שאפשר להצמיד למשימות. אפשר לבחור כמה לכל משימה.">
-        <LabelForm key={`label-add-${labelFormKey}`} submitLabel="הוסף תווית" onSubmit={createLabel} />
+        <LabelForm key={`label-add-${labelFormKey}`} submitLabel="הוספת תווית" onSubmit={createLabel} />
 
         <div style={{ display: "flex", flexDirection: "column", gap: "var(--sp-2)", marginTop: "var(--sp-4)" }}>
           {labels.length === 0 && <EmptyHint text="עדיין אין תוויות. אפשר ליצור אחת למעלה." />}
