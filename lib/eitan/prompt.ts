@@ -4,6 +4,14 @@ import { addDays, formatWhen, WEEKDAY_NAME_HE } from "./time";
 // Reply that means "this message wasn't for me — post nothing".
 export const SILENT_TOKEN = "[SILENT]";
 
+/** A reminder Eitan recently posted in the chat (from the reminder cron). */
+export interface RecentReminder {
+  task_id: string;
+  title: string;
+  occurrence_date: string | null;
+  posted_at: string;
+}
+
 // Frozen: never interpolate anything per-request here (it is the cached prefix).
 export const STATIC_SYSTEM = `You are איתן (Eitan), the family assistant inside a private household app. Two adults (a couple) share one chat with you; their names, the children, today's date and the open items are in the context block that follows.
 
@@ -20,7 +28,10 @@ How you write:
 Dates and times:
 - All dates and times are Israel time. Resolve words like "מחר", "יום שלישי", "בעוד שבועיים" against the calendar in the context block. "יום שלישי" means the next upcoming Tuesday (today counts only if the time is still ahead).
 - If the time of day is ambiguous (e.g. "ב-4" could be 04:00 or 16:00), choose the sensible daytime reading and state it in the confirmation. If the date itself is truly unclear, ask one short question instead of guessing.
-- A reminder with a time gets a phone notification at that time. Without a time it shows in the morning summary.
+- A reminder with a time gets a phone notification at that time, and it is also posted in this chat ("⏰ תזכורת…"). Without a time it appears in the morning summary posted here each morning.
+
+Reminders posted in the chat:
+- The context block lists the reminders recently posted here, with their task_id and date. When an adult answers one with "בוצע", "עשיתי", "סיימתי", "קניתי" and the like, mark that task done for that date (for a repeating task, pass occurrence_date). If several reminders could match, prefer the most recent one that is still open; if it's still unclear, ask which.
 
 Being careful:
 - Before delete_task, ask for confirmation in the chat and only delete after an adult clearly confirms in a later message.
@@ -34,7 +45,8 @@ Staying quiet:
 export function contextBlock(
   ctx: EitanContext,
   nowTime: string,
-  snapshot: { items: Record<string, unknown>[]; truncated: boolean }
+  snapshot: { items: Record<string, unknown>[]; truncated: boolean },
+  recentReminders: RecentReminder[]
 ): string {
   const today = ctx.today;
   const calendar: string[] = [];
@@ -55,6 +67,9 @@ export function contextBlock(
     ``,
     `Open items (overdue from the last 14 days, the next 30 days, and undated to-dos)${snapshot.truncated ? " — list truncated, use list_tasks for more" : ""}:`,
     snapshot.items.length ? JSON.stringify(snapshot.items) : "none",
+    ``,
+    `Reminders posted in the chat in the last 36 hours (newest last):`,
+    recentReminders.length ? JSON.stringify(recentReminders) : "none",
   ];
   return lines.join("\n");
 }

@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { getSessionMember } from "@/lib/currentUser";
 import { runEitan } from "@/lib/eitan/run";
+import type { RecentReminder } from "@/lib/eitan/prompt";
 import type { ChatMessage, FamilyMember } from "@/lib/types";
 
 // Anthropic SDK + Supabase service client: Node runtime, never Edge.
@@ -51,7 +52,8 @@ export async function POST(request: Request) {
     .select("id");
   if (!claimed || claimed.length === 0) return NextResponse.json({ status: "already-handled" });
 
-  const [{ data: historyDesc }, { data: members }] = await Promise.all([
+  const since = new Date(Date.now() - 36 * 3_600_000).toISOString();
+  const [{ data: historyDesc }, { data: members }, { data: reminderRows }] = await Promise.all([
     supabase
       .from("chat_messages")
       .select("*")
@@ -59,7 +61,30 @@ export async function POST(request: Request) {
       .order("created_at", { ascending: false })
       .limit(HISTORY_LIMIT),
     supabase.from("family_members").select("*").order("created_at", { ascending: true }),
+    // Reminders the cron posted recently, so "בוצע" can be tied to a task.
+    supabase
+      .from("chat_messages")
+      .select("body, meta, created_at")
+      .eq("role", "assistant")
+      .contains("meta", { kind: "reminder" })
+      .gte("created_at", since)
+      .lte("created_at", msg.created_at)
+      .order("created_at", { ascending: true })
+      .limit(20),
   ]);
+
+  const recentReminders: RecentReminder[] = ((reminderRows as Pick<ChatMessage, "body" | "meta" | "created_at">[]) ?? [])
+    .map((r) => {
+      const ids = Array.isArray(r.meta.task_ids) ? (r.meta.task_ids as string[]) : [];
+      return {
+        task_id: ids[0] ?? "",
+        // "⏰ תזכורת לאסף: <title> · <when>" → keep the first line for the model.
+        title: r.body.split("\n")[0],
+        occurrence_date: typeof r.meta.occurrence_date === "string" ? r.meta.occurrence_date : null,
+        posted_at: r.created_at,
+      };
+    })
+    .filter((r) => r.task_id);
   const all = (members as FamilyMember[]) ?? [];
   const adults = all.filter((m) => m.type === "adult");
   const children = all.filter((m) => m.type === "child");
@@ -70,7 +95,8 @@ export async function POST(request: Request) {
 
   const result = await runEitan(
     { supabase, sender, otherAdult: adults.find((a) => a.id !== me.id) ?? null, adults, children },
-    history
+    history,
+    recentReminders
   );
 
   if (!result.reply) return NextResponse.json({ status: "silent", task_ids: result.taskIds });

@@ -4,12 +4,16 @@ import { createServiceClient } from "@/lib/supabase/service";
 import { openOccurrencesForDay, overdueSingles } from "@/lib/stats";
 import { sendPushToMember, type PushPayload } from "@/lib/push";
 import type { OccurrenceOverride, Responsibility, Task } from "@/lib/types";
+import { buildChatDigest, buildChatReminder, type ChatPost } from "@/lib/eitan/chatPosts";
 
 // web-push signs with Node crypto — never Edge.
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const WINDOW_MINUTES = 15;
+// Must match the scheduler: the job runs every 5 minutes, and each run covers
+// the next 5. A reminder therefore fires at most 5 minutes early.
+const WINDOW_MINUTES = 5;
+const DEFAULT_DIGEST_TIME = "07:00";
 const DIGEST_BODY_MAX_LINES = 5;
 const UNASSIGNED_LABEL = "לא משויך";
 
@@ -84,14 +88,37 @@ function jerusalemNow(): { todayISO: string; nowMinutes: number; iso: string } {
 
 // ── core ─────────────────────────────────────────────────
 
-async function handle(request: Request): Promise<NextResponse> {
-  // 1. AUTH — a missing secret must fail closed, never fall through to allow.
-  const cronSecret = process.env.CRON_SECRET;
-  if (!cronSecret) {
-    console.error("[cron/reminders] CRON_SECRET is not set");
-    return NextResponse.json({ error: "server misconfigured" }, { status: 500 });
+/**
+ * AUTH — fails closed. The scheduler (pg_cron, migration 017) sends a bearer
+ * token that lives only in Supabase Vault; verify_cron_secret() compares it in
+ * the database, so the secret never has to be copied into Vercel or the repo.
+ * A CRON_SECRET env var, when set, is also accepted (local dry runs).
+ */
+async function isAuthorized(request: Request): Promise<boolean> {
+  const header = request.headers.get("authorization") ?? "";
+  if (!header.startsWith("Bearer ")) return false;
+  const token = header.slice("Bearer ".length);
+  if (!token) return false;
+
+  const envSecret = process.env.CRON_SECRET;
+  if (envSecret && token === envSecret) return true;
+
+  try {
+    const { data, error } = await createServiceClient().rpc("verify_cron_secret", { token });
+    if (error) {
+      console.error("[cron/reminders] verify_cron_secret failed:", error.message);
+      return false;
+    }
+    return data === true;
+  } catch (err) {
+    console.error("[cron/reminders] auth check unavailable:", (err as Error).message);
+    return false;
   }
-  if (request.headers.get("authorization") !== `Bearer ${cronSecret}`) {
+}
+
+async function handle(request: Request): Promise<NextResponse> {
+  // 1. AUTH
+  if (!(await isAuthorized(request))) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
@@ -237,7 +264,7 @@ async function handle(request: Request): Promise<NextResponse> {
         memberName: member.name,
         title: digestTitle,
         body: digestBody,
-        url: "/tasks",
+        url: "/chat",
       });
     }
   }
@@ -263,9 +290,31 @@ async function handle(request: Request): Promise<NextResponse> {
         memberName: member.name,
         title: occ.task.title,
         body,
-        url: "/tasks",
+        url: "/chat",
       });
     }
+  }
+
+  // 8b. CHAT PATH — independent of push opt-in. Eitan posts into the shared
+  // chat once per household: each timed task at its due time, and the morning
+  // summary at the earliest adult digest_time (default 07:00).
+  const adults = members.filter((m) => m.type === "adult");
+  const chatPlanned: ChatPost[] = [];
+
+  for (const occ of occurrences) {
+    if (!occ.task.due_time || !occ.date) continue;
+    const dueMinutes = timeToMinutes(occ.task.due_time);
+    if (dueMinutes === null || !inWindow(dueMinutes)) continue;
+    chatPlanned.push(buildChatReminder(occ, adults, todayISO));
+  }
+
+  const digestMinutes = Math.min(
+    ...adults.map((a) => timeToMinutes(a.digest_time ?? DEFAULT_DIGEST_TIME) ?? Infinity),
+    timeToMinutes(DEFAULT_DIGEST_TIME) as number
+  );
+  if (inWindow(digestMinutes)) {
+    const digest = buildChatDigest(occurrences, overdue, adults, todayISO);
+    if (digest) chatPlanned.unshift(digest);
   }
 
   // 9 + 10. Claim the dedupe key BEFORE sending. A missed reminder is better
@@ -320,6 +369,24 @@ async function handle(request: Request): Promise<NextResponse> {
     }
   }
 
+  // Chat posts: the unique dedupe_key index (migration 016) is the claim — a
+  // second run's insert fails with 23505 and is counted as a duplicate.
+  let chatPosted = 0;
+  let chatSkippedDuplicate = 0;
+  if (!dry) {
+    for (const post of chatPlanned) {
+      const { error } = await supabase.from("chat_messages").insert({
+        role: "assistant",
+        author_id: null,
+        body: post.body,
+        meta: { ...post.meta, dedupe_key: post.dedupeKey },
+      });
+      if (!error) chatPosted += 1;
+      else if (error.code === "23505") chatSkippedDuplicate += 1;
+      else errors.push(`chat ${post.dedupeKey}: ${error.message}`);
+    }
+  }
+
   // 11. Always 200. Never leaks the secret, the service key, endpoints or subscription keys.
   return NextResponse.json(
     {
@@ -338,6 +405,9 @@ async function handle(request: Request): Promise<NextResponse> {
       sent,
       skippedDuplicate,
       failed,
+      chatPlanned: chatPlanned.map((p) => ({ dedupeKey: p.dedupeKey, body: p.body })),
+      chatPosted,
+      chatSkippedDuplicate,
       errors,
     },
     { status: 200 }

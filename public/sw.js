@@ -23,7 +23,7 @@ self.addEventListener('push', (event) => {
     lang: 'he',
     icon: '/icon-192.png',
     badge: '/icon-192.png',
-    data: { url: payload.url || '/tasks' },
+    data: { url: payload.url || '/chat' },
     renotify: false,
   };
   event.waitUntil(self.registration.showNotification(title, options));
@@ -31,7 +31,7 @@ self.addEventListener('push', (event) => {
 
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
-  const target = (event.notification.data && event.notification.data.url) || '/tasks';
+  const target = (event.notification.data && event.notification.data.url) || '/chat';
   event.waitUntil(
     self.clients
       .matchAll({ type: 'window', includeUncontrolled: true })

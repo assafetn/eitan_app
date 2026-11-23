@@ -4,7 +4,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import type { ChatMessage } from "@/lib/types";
 import { makeTools, openItemsSnapshot, type EitanContext } from "./tools";
-import { contextBlock, SILENT_TOKEN, STATIC_SYSTEM } from "./prompt";
+import { contextBlock, SILENT_TOKEN, STATIC_SYSTEM, type RecentReminder } from "./prompt";
 import { jerusalemNow } from "./time";
 
 const MODEL = "claude-opus-5-5";
@@ -41,7 +41,11 @@ export interface EitanResult {
   taskIds: string[];
 }
 
-export async function runEitan(ctx: Omit<EitanContext, "today" | "touchedTaskIds">, history: ChatMessage[]): Promise<EitanResult> {
+export async function runEitan(
+  ctx: Omit<EitanContext, "today" | "touchedTaskIds">,
+  history: ChatMessage[],
+  recentReminders: RecentReminder[] = []
+): Promise<EitanResult> {
   const now = jerusalemNow();
   const full: EitanContext = { ...ctx, today: now.date, touchedTaskIds: new Set() };
   const nameById = new Map(ctx.adults.map((a) => [a.id, a.name]));
@@ -65,7 +69,7 @@ export async function runEitan(ctx: Omit<EitanContext, "today" | "touchedTaskIds
       max_iterations: MAX_TOOL_ROUNDS,
       system: [
         { type: "text", text: STATIC_SYSTEM, cache_control: { type: "ephemeral" } },
-        { type: "text", text: contextBlock(full, now.time, snapshot) },
+        { type: "text", text: contextBlock(full, now.time, snapshot, recentReminders) },
       ],
       tools: makeTools(full),
       messages,
