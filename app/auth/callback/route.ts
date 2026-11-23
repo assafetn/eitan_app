@@ -29,7 +29,7 @@ export async function GET(request: Request) {
         await supabase.rpc("link_current_user", { email });
       }
 
-      return NextResponse.redirect(`${origin}/home`);
+      return NextResponse.redirect(`${origin}/chat`);
     }
   }
 

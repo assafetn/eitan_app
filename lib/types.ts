@@ -83,3 +83,19 @@ export interface Task {
   responsibility?: Responsibility | null;
   labels?: Label[];
 }
+
+// ── Chat (redesign step 1) ────────────────────────────────
+
+export type ChatRole = "user" | "assistant";
+
+export interface ChatMessage {
+  id: string;
+  role: ChatRole;
+  /** The adult who wrote it; null for Eitan (assistant) messages. */
+  author_id: string | null;
+  body: string;
+  /** Device-generated id for idempotent sends / matching the realtime echo. */
+  client_id: string | null;
+  meta: Record<string, unknown>;
+  created_at: string;
+}

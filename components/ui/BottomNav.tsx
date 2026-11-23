@@ -5,6 +5,16 @@ import { usePathname } from "next/navigation";
 
 const tabs = [
   {
+    id: "chat",
+    href: "/chat",
+    label: "צ׳אט",
+    icon: (
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M21 11.5a8.4 8.4 0 0 1-9 8.4 9 9 0 0 1-3.9-.9L3 20.5l1.6-4.4A8.3 8.3 0 0 1 3 11.5 8.5 8.5 0 0 1 12 3a8.5 8.5 0 0 1 9 8.5z"/>
+      </svg>
+    ),
+  },
+  {
     id: "home",
     href: "/home",
     label: "בית",
@@ -28,7 +38,8 @@ const tabs = [
   },
 ] as const;
 // NOTE: משפחה is intentionally not a nav tab — the /family route still exists and
-// is reached from Settings (see SettingsClient). Two tabs, evenly distributed.
+// is reached from Settings (see SettingsClient). Three tabs, evenly distributed;
+// צ׳אט comes first — it is the landing screen (docs/chat-redesign-plan.md).
 
 export default function BottomNav({
   tasksBadge,

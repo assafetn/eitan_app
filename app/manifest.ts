@@ -22,9 +22,10 @@ export default function manifest(): MetadataRoute.Manifest {
     dir: "rtl",
     display: "standalone",
     orientation: "portrait",
-    // start_url is the dashboard; scope stays "/" so a notification tap into
+    // start_url is the shared chat (id stays "/home" — changing a PWA id makes
+    // installed copies a different app). scope stays "/" so a notification tap into
     // /tasks (or anywhere else) stays inside the standalone window.
-    start_url: "/home",
+    start_url: "/chat",
     scope: "/",
     background_color: "#161618",
     theme_color: "#161618",

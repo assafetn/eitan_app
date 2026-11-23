@@ -13,7 +13,7 @@ export default async function LoginPage({
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (user) redirect("/home");
+  if (user) redirect("/chat");
 
   const params = await searchParams;
 
