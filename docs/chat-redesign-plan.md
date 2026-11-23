@@ -20,7 +20,7 @@ The UI is secondary. The chat is the product. Feel reference: "zero-UI" texting 
 |---|---|
 | Channel | In-app chat (WhatsApp was considered and dropped) |
 | Login | Unchanged: Google OAuth via Supabase, `ALLOWED_EMAILS` |
-| AI model | Claude Sonnet 5.5 (`claude-sonnet-5-5`), called server-side with tool use. The key lives in `ANTHROPIC_API_KEY` and is never exposed to the browser |
+| AI model | Claude Opus 5.5 (`claude-opus-5-5`, effort `medium`), called server-side through the Messages API tool runner. Server-side refusal fallback is on (`fallbacks: "default"`). The key lives in `ANTHROPIC_API_KEY` and is never exposed to the browser |
 | Live updates | Supabase Realtime on `chat_messages`, so both phones see messages instantly |
 | Reminders | Existing reminder cron and Web Push stay. Reminders are also posted into the chat. Replying "בוצע" completes one |
 | Calendar | Two-way Google Calendar access to **each adult's own calendar** (no new shared calendar) |

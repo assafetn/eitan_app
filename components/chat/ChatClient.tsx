@@ -7,6 +7,7 @@ import type { ChatMessage, FamilyMember } from "@/lib/types";
 import Toast from "@/components/ui/Toast";
 
 const SEND_FAILED = "השליחה נכשלה, הקישו על ההודעה כדי לנסות שוב";
+const EITAN_FAILED = "איתן לא הצליח לענות כרגע";
 const ASSISTANT_NAME = "איתן";
 const TZ = "Asia/Jerusalem";
 // Within this many px of the bottom counts as "reading the latest" — new
@@ -85,6 +86,8 @@ export default function ChatClient({ myMemberId, adults, initialMessages }: Prop
   const [messages, setMessages] = useState<LocalMessage[]>(() => mergeMessages([], initialMessages));
   const [draft, setDraft] = useState("");
   const [toast, setToast] = useState<string | null>(null);
+  // How many Eitan turns this device is waiting on (drives "איתן כותב…").
+  const [eitanBusy, setEitanBusy] = useState(0);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -155,7 +158,7 @@ export default function ChatClient({ myMemberId, adults, initialMessages }: Prop
   useLayoutEffect(() => {
     const el = scrollRef.current;
     if (el && stickToBottomRef.current) el.scrollTop = el.scrollHeight;
-  }, [messages]);
+  }, [messages, eitanBusy]);
 
   // ── composer ──
   const autoGrow = () => {
@@ -164,6 +167,32 @@ export default function ChatClient({ myMemberId, adults, initialMessages }: Prop
     el.style.height = "auto";
     el.style.height = `${Math.min(el.scrollHeight, 140)}px`;
   };
+
+  // Ask Eitan to handle a message we just posted. His reply arrives through
+  // realtime like any other message; this call only drives the typing hint.
+  const askEitan = useCallback(async (messageId: string) => {
+    setEitanBusy((n) => n + 1);
+    stickToBottomRef.current = true;
+    try {
+      const res = await fetch("/api/chat/respond", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message_id: messageId }),
+      });
+      if (!res.ok) setToast(EITAN_FAILED);
+      // Belt and braces: if the realtime echo of the reply was missed, fetch it.
+      const { data } = await supabase
+        .from("chat_messages")
+        .select("*")
+        .eq("role", "assistant")
+        .contains("meta", { reply_to: messageId });
+      if (data?.length) upsert(data as ChatMessage[]);
+    } catch {
+      setToast(EITAN_FAILED);
+    } finally {
+      setEitanBusy((n) => Math.max(0, n - 1));
+    }
+  }, [supabase, upsert]);
 
   const deliver = useCallback(
     async (msg: LocalMessage) => {
@@ -175,6 +204,7 @@ export default function ChatClient({ myMemberId, adults, initialMessages }: Prop
 
       if (!error && data) {
         upsert([data as ChatMessage]);
+        void askEitan((data as ChatMessage).id);
         return;
       }
       // 23505 = unique violation on client_id: an earlier attempt already
@@ -183,13 +213,15 @@ export default function ChatClient({ myMemberId, adults, initialMessages }: Prop
         const { data: existing } = await supabase.from("chat_messages").select("*").eq("client_id", msg.client_id).single();
         if (existing) {
           upsert([existing as ChatMessage]);
+          // Safe to ask again: the server runs Eitan at most once per message.
+          void askEitan((existing as ChatMessage).id);
           return;
         }
       }
       setMessages((prev) => prev.map((m) => (m.id === msg.id ? { ...m, status: "failed" } : m)));
       setToast(SEND_FAILED);
     },
-    [supabase, upsert]
+    [supabase, upsert, askEitan]
   );
 
   const send = () => {
@@ -294,6 +326,7 @@ export default function ChatClient({ myMemberId, adults, initialMessages }: Prop
             );
           })
         )}
+        {eitanBusy > 0 && <TypingHint />}
       </div>
 
       <form
@@ -454,6 +487,27 @@ function Bubble({
   );
 }
 
+function TypingHint() {
+  return (
+    <div style={{ display: "flex", justifyContent: "flex-start", marginTop: "var(--sp-3)" }}>
+      <span
+        role="status"
+        style={{
+          fontFamily: "var(--font)",
+          fontSize: "var(--text-sm)",
+          color: "var(--jmh-periwinkle)",
+          background: "var(--jmh-periwinkle-bg)",
+          border: "1px solid var(--border)",
+          borderRadius: "var(--r-lg)",
+          padding: "6px 12px",
+        }}
+      >
+        איתן כותב…
+      </span>
+    </div>
+  );
+}
+
 function DaySeparator({ label }: { label: string }) {
   return (
     <div style={{ display: "flex", justifyContent: "center", margin: "var(--sp-4) 0 var(--sp-1)" }}>
@@ -489,9 +543,9 @@ function EmptyState() {
         הצ׳אט המשפחתי
       </p>
       <p style={{ fontSize: "var(--text-sm)", margin: 0, lineHeight: 1.5 }}>
-        כאן כותבים אחד לשנייה ולאיתן.
+        כתבו לאיתן מה לזכור, והוא יקבע תזכורות לכם.
         <br />
-        בקרוב איתן יענה, יקבע תזכורות ויוסיף ליומן כשתבקשו.
+        למשל: ״תזכיר לנו מחר ב-16:00 לקחת את איתן לרופא״
       </p>
     </div>
   );
