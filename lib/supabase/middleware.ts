@@ -39,7 +39,9 @@ export async function updateSession(request: NextRequest) {
   const isPublic =
     pathname.startsWith("/login") ||
     pathname.startsWith("/auth/callback") ||
-    pathname.startsWith("/no-access");
+    pathname.startsWith("/no-access") ||
+    // Linked from Google's OAuth consent screen; must open without a login.
+    pathname.startsWith("/privacy");
 
   if (!user && !isPublic) {
     const url = request.nextUrl.clone();
