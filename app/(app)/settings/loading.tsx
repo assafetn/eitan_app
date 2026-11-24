@@ -1,7 +1,7 @@
 import { SkelBar, SkelList, SkelPageShell } from "@/components/ui/Skeleton";
 
 // Matches SettingsClient: a back-header, then a couple of labelled sections of
-// rows (responsibilities, labels, members).
+// rows (appearance, family, notifications).
 export default function SettingsLoading() {
   return (
     <SkelPageShell>

@@ -28,7 +28,7 @@ export interface EitanContext {
 const TASK_SELECT =
   "*, assignee:family_members!tasks_assignee_id_fkey(*), child:family_members!tasks_child_id_fkey(*)";
 
-type ForWhom = "sender" | "other" | "both" | "none";
+type ForWhom = "sender" | "other" | "both";
 
 // ── data access ──────────────────────────────────────────
 
@@ -47,7 +47,7 @@ export async function loadTasks(supabase: SupabaseClient): Promise<{ tasks: Task
 function peopleLabel(task: Task, ctx: EitanContext): string {
   if (task.is_shared) return "שניכם";
   if (task.assignee_id) return ctx.adults.find((a) => a.id === task.assignee_id)?.name ?? "לא ידוע";
-  return "לא משויך";
+  return "שניכם"; // no owner can no longer happen (migration 019)
 }
 
 function describe(occ: ResolvedOccurrence, ctx: EitanContext) {
@@ -114,9 +114,8 @@ function resolvePeople(forWhom: ForWhom, ctx: EitanContext): { assignee_id: stri
     case "other":
       return { assignee_id: ctx.otherAdult?.id ?? ctx.sender.id, is_shared: false };
     case "both":
-      return { assignee_id: null, is_shared: true };
     default:
-      return { assignee_id: null, is_shared: false };
+      return { assignee_id: null, is_shared: true };
   }
 }
 
@@ -141,9 +140,9 @@ const fail = (error: string) => JSON.stringify({ ok: false, error });
 
 const FOR_WHOM = {
   type: "string",
-  enum: ["sender", "other", "both", "none"],
+  enum: ["sender", "other", "both"],
   description:
-    'Who it is for: "sender" = the adult who wrote the message ("לי", "תזכיר לי"); "other" = the other adult; "both" = the two adults together ("לנו", "לשנינו"); "none" = nobody specific.',
+    'Who owns it (every task has an owner, and only the owner gets its reminders): "sender" = the adult who wrote the message ("לי", "תזכיר לי"); "other" = the other adult; "both" = the two adults together ("לנו", "לשנינו", or when it is about the family/kids and nobody was named).',
 } as const;
 
 const WEEKDAYS = {

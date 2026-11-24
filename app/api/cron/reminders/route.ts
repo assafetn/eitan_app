@@ -3,7 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { createServiceClient } from "@/lib/supabase/service";
 import { openOccurrencesForDay, overdueSingles } from "@/lib/stats";
 import { sendPushToMember, type PushPayload } from "@/lib/push";
-import type { OccurrenceOverride, Responsibility, Task } from "@/lib/types";
+import type { OccurrenceOverride, Task } from "@/lib/types";
 import { buildChatDigest, buildChatReminder, type ChatPost } from "@/lib/eitan/chatPosts";
 
 // web-push signs with Node crypto — never Edge.
@@ -20,7 +20,7 @@ const WINDOW_MINUTES = 5;
 const LOOKBACK_MINUTES = 15;
 const DEFAULT_DIGEST_TIME = "07:00";
 const DIGEST_BODY_MAX_LINES = 5;
-const UNASSIGNED_LABEL = "לא משויך";
+const BOTH_LABEL = "שניכם";
 
 // family_members carries reminder settings that aren't on the shared
 // FamilyMember interface (they're only needed here), so this route types the
@@ -179,8 +179,8 @@ async function handle(request: Request): Promise<NextResponse> {
   }
 
   // 4. LOAD — same partitioning as app/(app)/tasks/page.tsx: primary rows vs
-  // override rows. No joins needed; labels resolve through the lookup maps below.
-  const [tasksRes, overridesRes, membersRes, responsibilitiesRes] = await Promise.all([
+  // override rows. No joins needed; names resolve through the lookup map below.
+  const [tasksRes, overridesRes, membersRes] = await Promise.all([
     supabase.from("tasks").select("*").is("recurrence_parent_id", null),
     supabase
       .from("tasks")
@@ -189,14 +189,12 @@ async function handle(request: Request): Promise<NextResponse> {
     supabase
       .from("family_members")
       .select("id, name, type, reminders_enabled, digest_time, reminder_lead_minutes"),
-    supabase.from("responsibilities").select("id, owner_id"),
   ]);
 
   for (const [label, res] of [
     ["tasks", tasksRes],
     ["overrides", overridesRes],
     ["members", membersRes],
-    ["responsibilities", responsibilitiesRes],
   ] as const) {
     if (res.error) errors.push(`load ${label}: ${res.error.message}`);
   }
@@ -204,8 +202,6 @@ async function handle(request: Request): Promise<NextResponse> {
   const tasks = (tasksRes.data as Task[] | null) ?? [];
   const overrides = (overridesRes.data as OccurrenceOverride[] | null) ?? [];
   const members = (membersRes.data as ReminderMember[] | null) ?? [];
-  const responsibilities =
-    (responsibilitiesRes.data as Pick<Responsibility, "id" | "owner_id">[] | null) ?? [];
 
   // The shared occurrence engine — never reimplemented here.
   const occurrences = openOccurrencesForDay(tasks, overrides, todayISO);
@@ -215,30 +211,38 @@ async function handle(request: Request): Promise<NextResponse> {
   // in this version by explicit decision; those columns are not read.
   const recipients = members.filter((m) => m.type === "adult" && m.reminders_enabled);
 
-  // 6. ASSIGNEE LABEL — one helper, both paths.
+  // 6. OWNERS. Every task has an owner (migration 019): one adult, or both
+  // (is_shared). Only the owner(s) get its push notifications.
   const memberNameById = new Map(members.map((m) => [m.id, m.name]));
-  const responsibilityOwnerById = new Map(responsibilities.map((r) => [r.id, r.owner_id]));
+
+  function isOwner(task: Task, memberId: string): boolean {
+    if (task.is_shared) return true;
+    if (task.assignee_id) return task.assignee_id === memberId;
+    return true; // no owner (shouldn't exist anymore): don't let it go silent
+  }
 
   function assigneeLabel(task: Task): string {
-    if (task.assignee_id) {
+    if (!task.is_shared && task.assignee_id) {
       const name = memberNameById.get(task.assignee_id);
       if (name) return name;
     }
-    if (task.responsibility_id) {
-      const ownerId = responsibilityOwnerById.get(task.responsibility_id);
-      const ownerName = ownerId ? memberNameById.get(ownerId) : undefined;
-      if (ownerName) return ownerName;
-    }
-    return UNASSIGNED_LABEL;
+    return BOTH_LABEL;
   }
 
   const planned: PlannedNotification[] = [];
 
-  // 7. DIGEST PATH
-  const todayCount = occurrences.length;
-  const overdueCount = overdue.length;
+  // 7. DIGEST PATH — one per adult, covering only the tasks they own (their
+  // own and shared ones). Nothing of theirs today → no digest push for them.
+  for (const member of recipients) {
+    const digestMinutes = member.digest_time ? timeToMinutes(member.digest_time) : null;
+    if (digestMinutes === null || !inWindow(digestMinutes)) continue;
 
-  if (todayCount > 0 || overdueCount > 0) {
+    const mine = occurrences.filter((occ) => isOwner(occ.task, member.id));
+    const mineOverdue = overdue.filter((t) => isOwner(t, member.id));
+    const todayCount = mine.length;
+    const overdueCount = mineOverdue.length;
+    if (todayCount === 0 && overdueCount === 0) continue;
+
     const todayLabel = todayCount === 1 ? "משימה אחת להיום" : `${todayCount} משימות להיום`;
     const digestTitle =
       todayCount > 0 && overdueCount > 0
@@ -250,42 +254,37 @@ async function handle(request: Request): Promise<NextResponse> {
         : `${overdueCount} משימות באיחור`;
 
     const allLines = [
-      ...occurrences.map((occ) => `${occ.task.title} — ${assigneeLabel(occ.task)}`),
-      ...overdue.map((t) => `באיחור: ${t.title} — ${assigneeLabel(t)}`),
+      ...mine.map((occ) => `${occ.task.title} — ${assigneeLabel(occ.task)}`),
+      ...mineOverdue.map((t) => `באיחור: ${t.title} — ${assigneeLabel(t)}`),
     ];
     const shown = allLines.slice(0, DIGEST_BODY_MAX_LINES);
     if (allLines.length > DIGEST_BODY_MAX_LINES) {
       shown.push(`ועוד ${allLines.length - DIGEST_BODY_MAX_LINES}`);
     }
-    const digestBody = shown.join("\n");
 
-    for (const member of recipients) {
-      const digestMinutes = member.digest_time ? timeToMinutes(member.digest_time) : null;
-      if (digestMinutes === null || !inWindow(digestMinutes)) continue;
-      planned.push({
-        kind: "digest",
-        dedupeKey: `digest:${member.id}:${todayISO}`,
-        memberId: member.id,
-        memberName: member.name,
-        title: digestTitle,
-        body: digestBody,
-        url: "/chat",
-      });
-    }
+    planned.push({
+      kind: "digest",
+      dedupeKey: `digest:${member.id}:${todayISO}`,
+      memberId: member.id,
+      memberName: member.name,
+      title: digestTitle,
+      body: shown.join("\n"),
+      url: "/chat",
+    });
   }
 
-  // 8. PER-TASK PATH. Lead time is per recipient, so the same task can fire in
-  // different windows for the two adults — that is correct.
+  // 8. PER-TASK PATH — only to the task's owner(s). Lead time is per
+  // recipient, so a shared task can fire in different windows for the two.
   for (const occ of occurrences) {
     const dueTime = occ.task.due_time;
     if (!dueTime || !occ.date) continue;
     const dueMinutes = timeToMinutes(dueTime);
     if (dueMinutes === null) continue;
 
-    const label = assigneeLabel(occ.task);
-    const body = `${formatHHMM(dueTime)} · ${label}`;
+    const body = `${formatHHMM(dueTime)} · ${assigneeLabel(occ.task)}`;
 
     for (const member of recipients) {
+      if (!isOwner(occ.task, member.id)) continue;
       const fireAt = dueMinutes - (member.reminder_lead_minutes ?? 0);
       if (!inWindow(fireAt)) continue;
       planned.push({
@@ -402,8 +401,8 @@ async function handle(request: Request): Promise<NextResponse> {
       dry,
       at,
       counts: {
-        occurrencesToday: todayCount,
-        overdueSingles: overdueCount,
+        occurrencesToday: occurrences.length,
+        overdueSingles: overdue.length,
         recipients: recipients.length,
       },
       planned,

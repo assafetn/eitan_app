@@ -1,5 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
-import type { FamilyMember, Label, OccurrenceOverride, Responsibility, Task } from "@/lib/types";
+import type { FamilyMember, OccurrenceOverride, Task } from "@/lib/types";
 import TasksClient from "./TasksClient";
 
 export const dynamic = "force-dynamic";
@@ -16,16 +16,11 @@ export default async function TasksPage() {
     { data: overrides },
     { data: members },
     { data: children },
-    { data: responsibilities },
-    { data: labels },
   ] = await Promise.all([
-    // responsibility.owner is intentionally not joined — nothing on the task
-    // list reads it (getTaskPeople resolves people from assignee/
-    // is_shared; the badge shows only the responsibility name + colour).
     supabase
       .from("tasks")
       .select(
-        "*, assignee:family_members!tasks_assignee_id_fkey(*), child:family_members!tasks_child_id_fkey(*), responsibility:responsibilities!tasks_responsibility_id_fkey(*), labels(*)"
+        "*, assignee:family_members!tasks_assignee_id_fkey(*), child:family_members!tasks_child_id_fkey(*)"
       )
       .is("recurrence_parent_id", null)
       .order("due_date", { ascending: true, nullsFirst: false })
@@ -44,11 +39,6 @@ export default async function TasksPage() {
       .select("*")
       .eq("type", "child")
       .order("created_at", { ascending: true }),
-    supabase
-      .from("responsibilities")
-      .select("*, owner:family_members!responsibilities_owner_id_fkey(*)")
-      .order("created_at", { ascending: true }),
-    supabase.from("labels").select("*").order("created_at", { ascending: true }),
   ]);
 
   const adults = (members as FamilyMember[]) ?? [];
@@ -59,8 +49,6 @@ export default async function TasksPage() {
       initialOverrides={(overrides as OccurrenceOverride[]) ?? []}
       members={adults}
       childMembers={(children as FamilyMember[]) ?? []}
-      responsibilities={(responsibilities as Responsibility[]) ?? []}
-      labels={(labels as Label[]) ?? []}
     />
   );
 }

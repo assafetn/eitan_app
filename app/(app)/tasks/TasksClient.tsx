@@ -4,10 +4,8 @@ import { useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import type {
   FamilyMember,
-  Label,
   OccurrenceOverride,
   RecurrenceRule,
-  Responsibility,
   Task,
   TaskPriority,
   TaskStatus,
@@ -28,10 +26,6 @@ interface Props {
   initialOverrides: OccurrenceOverride[];
   members: FamilyMember[];
   childMembers: FamilyMember[];
-  /** Existing responsibilities, offered in the add-task sheet. Defaults to []. */
-  responsibilities?: Responsibility[];
-  /** Existing labels, offered in the add-task sheet. Defaults to []. */
-  labels?: Label[];
   /** Heading shown at the top. Defaults to "משימות". */
   title?: string;
   /** Whether to show the "add task" button. Defaults to true. */
@@ -57,18 +51,12 @@ export default function TasksClient({
   initialOverrides,
   members,
   childMembers,
-  responsibilities: initialResponsibilities = [],
-  labels: initialLabels = [],
   title = "משימות",
   showAddButton = true,
   openOnly = false,
 }: Props) {
   const [tasks, setTasks] = useState<Task[]>(initialTasks);
   const [overrides, setOverrides] = useState<OccurrenceOverride[]>(initialOverrides);
-  // Held in state so inline-created responsibilities/labels appear immediately
-  // and persist across re-opens of the sheet within this session.
-  const [responsibilities, setResponsibilities] = useState<Responsibility[]>(initialResponsibilities);
-  const [labels, setLabels] = useState<Label[]>(initialLabels);
   const [showAdd, setShowAdd] = useState(false);
   // When set, the add-task sheet opens in edit mode for this task (the series
   // parent, for a recurring occurrence).
@@ -279,35 +267,6 @@ export default function TasksClient({
     }
   }
 
-  // ── Inline create-new from the add-task sheet (7.2b) ──
-  // Minimal: responsibility = name + owner; label = name. Color/edit/delete
-  // stay in settings. Inserts go to the same tables under is_adult() RLS.
-  async function createResponsibility(name: string, ownerId: string): Promise<Responsibility | null> {
-    const supabase = createClient();
-    const { data, error } = await supabase
-      .from("responsibilities")
-      .insert({ name, owner_id: ownerId, color: null })
-      .select("*, owner:family_members!responsibilities_owner_id_fkey(*)")
-      .single();
-    if (error || !data) return null;
-    const resp = data as Responsibility;
-    setResponsibilities((prev) => [...prev, resp]);
-    return resp;
-  }
-
-  async function createLabel(name: string): Promise<Label | null> {
-    const supabase = createClient();
-    const { data, error } = await supabase
-      .from("labels")
-      .insert({ name, color: null })
-      .select("*")
-      .single();
-    if (error || !data) return null;
-    const label = data as Label;
-    setLabels((prev) => [...prev, label]);
-    return label;
-  }
-
   async function addTask(data: {
     title: string;
     notes: string;
@@ -315,8 +274,6 @@ export default function TasksClient({
     due_time: string | null;
     assignee_id: string | null;
     child_id: string | null;
-    responsibility_id: string | null;
-    label_ids: string[];
     recurrence_rule: RecurrenceRule | null;
     priority: TaskPriority;
     is_shared: boolean;
@@ -324,9 +281,6 @@ export default function TasksClient({
     const supabase = createClient();
     const memberId = (await getMyMemberId(supabase)) ?? members[0]?.id;
 
-    // responsibility_id + labels live on the SERIES PARENT (this row). Recurring
-    // occurrences inherit them, exactly like child_id and due_time — override
-    // rows never carry them.
     const { data: newTask, error } = await supabase
       .from("tasks")
       .insert({
@@ -336,7 +290,6 @@ export default function TasksClient({
         due_time: data.due_time,
         assignee_id: data.assignee_id || null,
         child_id: data.child_id || null,
-        responsibility_id: data.responsibility_id || null,
         status: "open",
         priority: data.priority,
         is_shared: data.is_shared,
@@ -354,21 +307,7 @@ export default function TasksClient({
       return;
     }
 
-    // Attach the selected labels via the task_labels join. The task itself is
-    // saved at this point, so a label failure gets a toast but still closes.
-    let labelsFailed = false;
-    if (data.label_ids.length > 0) {
-      const { error: labelError } = await supabase
-        .from("task_labels")
-        .insert(data.label_ids.map((label_id) => ({ task_id: (newTask as Task).id, label_id })));
-      labelsFailed = !!labelError;
-    }
-    // Hydrate the joined responsibility + labels from props so local state is
-    // complete without an extra round-trip. (Row badges render in 7.3.)
-    const responsibility = responsibilities.find((r) => r.id === data.responsibility_id) ?? null;
-    const taskLabels = labelsFailed ? [] : labels.filter((l) => data.label_ids.includes(l.id));
-    setTasks((prev) => [{ ...(newTask as Task), responsibility, labels: taskLabels }, ...prev]);
-    if (labelsFailed) setToast(SAVE_FAILED);
+    setTasks((prev) => [newTask as Task, ...prev]);
     scheduleRefresh();
     setShowAdd(false);
   }
@@ -381,8 +320,6 @@ export default function TasksClient({
     due_time: string | null;
     assignee_id: string | null;
     child_id: string | null;
-    responsibility_id: string | null;
-    label_ids: string[];
     recurrence_rule: RecurrenceRule | null;
     priority: TaskPriority;
     is_shared: boolean;
@@ -400,7 +337,6 @@ export default function TasksClient({
         due_time: data.due_time,
         assignee_id: data.assignee_id || null,
         child_id: data.child_id || null,
-        responsibility_id: data.responsibility_id || null,
         recurrence_rule: data.recurrence_rule,
         priority: data.priority,
         is_shared: data.is_shared,
@@ -414,33 +350,10 @@ export default function TasksClient({
       return;
     }
 
-    // Diff the label set: remove dropped links, add new ones.
-    const prevLabelIds = new Set((editingTask.labels ?? []).map((l) => l.id));
-    const nextLabelIds = new Set(data.label_ids);
-    const toRemove = [...prevLabelIds].filter((lid) => !nextLabelIds.has(lid));
-    const toAdd = data.label_ids.filter((lid) => !prevLabelIds.has(lid));
-    let labelsFailed = false;
-    if (toRemove.length > 0) {
-      const { error: e } = await supabase.from("task_labels").delete().eq("task_id", id).in("label_id", toRemove);
-      labelsFailed ||= !!e;
-    }
-    if (toAdd.length > 0) {
-      const { error: e } = await supabase.from("task_labels").insert(toAdd.map((label_id) => ({ task_id: id, label_id })));
-      labelsFailed ||= !!e;
-    }
-    if (labelsFailed) {
-      // The task fields saved; the label links may be partial. Say so and let
-      // the coalesced refresh pull the true state from the server.
-      setToast(SAVE_FAILED);
-      scheduleRefresh();
-    }
-
     // Update local state with re-hydrated joins so the row reflects edits without
-    // a refetch. Lists come from state/props (they include the owner join).
-    const responsibility = responsibilities.find((r) => r.id === data.responsibility_id) ?? null;
+    // a refetch.
     const assignee = members.find((m) => m.id === data.assignee_id) ?? null;
     const child = childMembers.find((c) => c.id === data.child_id) ?? null;
-    const taskLabels = labels.filter((l) => data.label_ids.includes(l.id));
     setTasks((prev) =>
       prev.map((t) =>
         t.id === id
@@ -452,14 +365,11 @@ export default function TasksClient({
               due_time: data.due_time,
               assignee_id: data.assignee_id || null,
               child_id: data.child_id || null,
-              responsibility_id: data.responsibility_id || null,
               recurrence_rule: data.recurrence_rule,
               priority: data.priority,
               is_shared: data.is_shared,
               assignee,
               child,
-              responsibility,
-              labels: taskLabels,
             }
           : t
       )
@@ -599,8 +509,6 @@ export default function TasksClient({
           key={editingTask?.id ?? "new"}
           members={members}
           childMembers={childMembers}
-          responsibilities={responsibilities}
-          labels={labels}
           editingTask={editingTask}
           onClose={() => {
             setShowAdd(false);
@@ -609,8 +517,6 @@ export default function TasksClient({
           onAdd={addTask}
           onSave={updateTask}
           onDelete={editingTask ? () => requestDeleteFromSheet(editingTask) : undefined}
-          onCreateResponsibility={createResponsibility}
-          onCreateLabel={createLabel}
         />
       )}
 

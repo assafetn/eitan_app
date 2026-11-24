@@ -1,13 +1,9 @@
 "use client";
 
-import type { FamilyMember, Label, Responsibility, Task, TaskStatus } from "@/lib/types";
+import type { FamilyMember, Task, TaskStatus } from "@/lib/types";
 import { formatDueDate, recurrenceLabel, todayISO } from "@/lib/recurrence";
 import { getTaskPeople } from "@/lib/taskPeople";
 import { Calendar, Check, Repeat, User } from "lucide-react";
-
-// At 390px we show at most this many label chips, then a "+N" overflow chip,
-// so a heavily-labelled task never blows the row height out.
-const LABEL_CAP = 2;
 
 interface Props {
   task: Task;
@@ -32,10 +28,6 @@ export default function TaskRow({ task, adults, date, status, isRecurring, onTog
   // dimmed done styling takes over. Overdue is signalled separately (coral
   // date + circle, and the list's "באיחור" group) — no side stripe.
   const isHighPriority = task.priority === "high" && !isDone;
-
-  const responsibility = task.responsibility ?? null;
-  const labels = task.labels ?? [];
-  const hasBadges = !!responsibility || labels.length > 0;
 
   // The single derived "who is on this task" concept: shared → both adults, else
   // the assignee, else nobody. One field, rendered from one User icon.
@@ -239,117 +231,8 @@ export default function TaskRow({ task, adults, date, status, isRecurring, onTog
           );
         })()}
 
-        {/* Responsibility badge + label chips (7.3). Only rendered when present
-            — a task with neither looks exactly as it did before. */}
-        {hasBadges && (
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "var(--sp-1)",
-              flexWrap: "wrap",
-              marginTop: 3,
-            }}
-          >
-            {responsibility && <ResponsibilityBadge responsibility={responsibility} />}
-            {labels.slice(0, LABEL_CAP).map((l) => (
-              <LabelChip key={l.id} label={l} />
-            ))}
-            {labels.length > LABEL_CAP && <MoreChip count={labels.length - LABEL_CAP} />}
-          </div>
-        )}
       </div>
 
     </div>
-  );
-}
-
-// Compact responsibility badge: color dot + name. Color may be null → fall back
-// to a neutral token rather than crashing on `var(--null)`.
-function ResponsibilityBadge({ responsibility }: { responsibility: Responsibility }) {
-  const dotColor = responsibility.color ? `var(--${responsibility.color})` : "var(--border-strong)";
-  return (
-    <span
-      style={{
-        display: "inline-flex",
-        alignItems: "center",
-        gap: "var(--sp-1)",
-        maxWidth: 150,
-        padding: "2px 8px",
-        borderRadius: "var(--r-full)",
-        background: "var(--bg)",
-        border: "1px solid var(--border)",
-      }}
-    >
-      <span style={{ width: 7, height: 7, borderRadius: "50%", background: dotColor, flexShrink: 0 }} />
-      <span
-        style={{
-          fontFamily: "var(--font)",
-          fontSize: "var(--text-xs)",
-          fontWeight: 500,
-          color: "var(--text-secondary)",
-          whiteSpace: "nowrap",
-          overflow: "hidden",
-          textOverflow: "ellipsis",
-        }}
-      >
-        {responsibility.name}
-      </span>
-    </span>
-  );
-}
-
-// Lighter than the responsibility badge — labels are secondary metadata.
-function LabelChip({ label }: { label: Label }) {
-  return (
-    <span
-      style={{
-        display: "inline-flex",
-        alignItems: "center",
-        gap: 4,
-        maxWidth: 110,
-        padding: "2px 7px",
-        borderRadius: "var(--r-sm)",
-        background: "var(--surface)",
-        border: "1px solid var(--border)",
-      }}
-    >
-      {label.color && (
-        <span style={{ width: 6, height: 6, borderRadius: "50%", background: `var(--${label.color})`, flexShrink: 0 }} />
-      )}
-      <span
-        style={{
-          fontFamily: "var(--font)",
-          fontSize: "var(--text-xs)",
-          color: "var(--text-muted)",
-          whiteSpace: "nowrap",
-          overflow: "hidden",
-          textOverflow: "ellipsis",
-        }}
-      >
-        {label.name}
-      </span>
-    </span>
-  );
-}
-
-function MoreChip({ count }: { count: number }) {
-  return (
-    <span
-      style={{
-        display: "inline-flex",
-        alignItems: "center",
-        padding: "2px 7px",
-        borderRadius: "var(--r-sm)",
-        background: "var(--surface)",
-        border: "1px solid var(--border)",
-        fontFamily: "var(--font)",
-        fontSize: "var(--text-xs)",
-        color: "var(--text-muted)",
-        flexShrink: 0,
-      }}
-    >
-      ‎+{count}
-    </span>
   );
 }
