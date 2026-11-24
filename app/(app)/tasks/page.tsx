@@ -61,7 +61,6 @@ export default async function TasksPage() {
       childMembers={(children as FamilyMember[]) ?? []}
       responsibilities={(responsibilities as Responsibility[]) ?? []}
       labels={(labels as Label[]) ?? []}
-      showFilter
     />
   );
 }

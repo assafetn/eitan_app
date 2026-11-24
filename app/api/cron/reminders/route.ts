@@ -178,7 +178,7 @@ async function handle(request: Request): Promise<NextResponse> {
     );
   }
 
-  // 4. LOAD — same partitioning as app/(app)/home/page.tsx: primary rows vs
+  // 4. LOAD — same partitioning as app/(app)/tasks/page.tsx: primary rows vs
   // override rows. No joins needed; labels resolve through the lookup maps below.
   const [tasksRes, overridesRes, membersRes, responsibilitiesRes] = await Promise.all([
     supabase.from("tasks").select("*").is("recurrence_parent_id", null),

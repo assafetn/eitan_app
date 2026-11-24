@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import type {
   FamilyMember,
@@ -13,7 +13,6 @@ import type {
   TaskStatus,
 } from "@/lib/types";
 import { addDaysISO, expandOccurrences, isCompletedOccurrenceVisible, todayISO } from "@/lib/recurrence";
-import { getTaskPeople } from "@/lib/taskPeople";
 import { useCoalescedRefresh } from "@/lib/useCoalescedRefresh";
 import TaskRow from "@/components/ui/TaskRow";
 import AddTaskModal from "@/components/ui/AddTaskModal";
@@ -39,14 +38,7 @@ interface Props {
   showAddButton?: boolean;
   /** When true, completed occurrences are hidden entirely (open-only view). */
   openOnly?: boolean;
-  /** Whether to show the אחריות/owner filter bar. /tasks only; off elsewhere. */
-  showFilter?: boolean;
 }
-
-// אחריות filter selection: a responsibility id, "all", or "none" (unassigned).
-type RespFilter = string | "all" | "none";
-// owner filter selection: an adult member id, or "all".
-type OwnerFilter = string | "all";
 
 const HORIZON_DAYS = 90;
 
@@ -70,7 +62,6 @@ export default function TasksClient({
   title = "משימות",
   showAddButton = true,
   openOnly = false,
-  showFilter = false,
 }: Props) {
   const [tasks, setTasks] = useState<Task[]>(initialTasks);
   const [overrides, setOverrides] = useState<OccurrenceOverride[]>(initialOverrides);
@@ -88,10 +79,6 @@ export default function TasksClient({
   const [toast, setToast] = useState<string | null>(null);
   // Coalesced re-fetch so the nav's tasks badge stays in sync after mutations.
   const scheduleRefresh = useCoalescedRefresh();
-
-  // Filter state — local UI only, resets on reload (7.3). The two cuts combine.
-  const [respFilter, setRespFilter] = useState<RespFilter>("all");
-  const [ownerFilter, setOwnerFilter] = useState<OwnerFilter>("all");
 
   const occurrences = useMemo<Occurrence[]>(() => {
     const start = todayISO();
@@ -142,78 +129,9 @@ export default function TasksClient({
     return out;
   }, [tasks, overrides, openOnly]);
 
-  // Open-task counts per filter label, derived from the SAME occurrence list the
-  // view builds (no new query, no re-implemented status logic). A recurring
-  // series counts once — distinct task id — not once per expanded occurrence, so
-  // the badge reads as "open tasks", not a huge occurrence tally. Counts are
-  // per-label totals, independent of the currently active אחריות/owner cut
-  // (simpler + predictable; the two cuts otherwise combine).
-  const filterCounts = useMemo(() => {
-    const respSets = new Map<string, Set<string>>();
-    const ownerSets = new Map<string, Set<string>>();
-    const allSet = new Set<string>();
-    const noneSet = new Set<string>();
-    for (const occ of occurrences) {
-      if (occ.status !== "open") continue; // open only — exclude done/completed
-      const t = occ.task;
-      allSet.add(t.id);
-      // אחריות counts — driven by responsibility_id, matching the respFilter cut.
-      if (t.responsibility_id) {
-        let rs = respSets.get(t.responsibility_id);
-        if (!rs) respSets.set(t.responsibility_id, (rs = new Set()));
-        rs.add(t.id);
-      } else {
-        noneSet.add(t.id);
-      }
-      // owner counts — driven by the SAME getTaskPeople predicate the owner cut
-      // uses below, so a shared task counts for both adults and counts never
-      // disagree with the rows the filter shows.
-      for (const p of getTaskPeople(t, members)) {
-        let os = ownerSets.get(p.id);
-        if (!os) ownerSets.set(p.id, (os = new Set()));
-        os.add(t.id);
-      }
-    }
-    const resp: Record<string, number> = {};
-    respSets.forEach((s, id) => (resp[id] = s.size));
-    const owner: Record<string, number> = {};
-    ownerSets.forEach((s, id) => (owner[id] = s.size));
-    return { all: allSet.size, none: noneSet.size, resp, owner };
-  }, [occurrences, members]);
-
-  // The filter predicate. Recurring occurrences carry their series parent in
-  // `occ.task`, so filtering by responsibility/owner includes/excludes them by
-  // the PARENT (same rule as 7.3).
-  const filterActive = respFilter !== "all" || ownerFilter !== "all";
-  const matchesFilter = useCallback(
-    (t: Task): boolean => {
-      // אחריות cut
-      if (respFilter === "none") {
-        if (t.responsibility_id !== null) return false;
-      } else if (respFilter !== "all") {
-        if (t.responsibility_id !== respFilter) return false;
-      }
-      // owner cut — tested against the derived people (shared → both adults,
-      // else assignee, else responsibility owner). A shared task matches BOTH
-      // adults' filters; a task with no people matches neither.
-      if (ownerFilter !== "all") {
-        const peopleIds = getTaskPeople(t, members).map((p) => p.id);
-        if (!peopleIds.includes(ownerFilter)) return false;
-      }
-      return true;
-    },
-    [respFilter, ownerFilter, members]
-  );
-
-  // Narrow the resolved occurrences; date grouping below is unchanged.
-  const filteredOccurrences = useMemo(
-    () => (filterActive ? occurrences.filter((occ) => matchesFilter(occ.task)) : occurrences),
-    [occurrences, filterActive, matchesFilter]
-  );
-
   const { overdue, today, upcoming, noDate } = useMemo(
-    () => groupOccurrences(filteredOccurrences),
-    [filteredOccurrences]
+    () => groupOccurrences(occurrences),
+    [occurrences]
   );
 
   async function getMyMemberId(supabase: ReturnType<typeof createClient>): Promise<string | null> {
@@ -634,22 +552,8 @@ export default function TasksClient({
         )}
       </div>
 
-      {/* Filter bar — sits between the header and the list so it visibly
-          governs the content below. /tasks only; needs responsibilities. */}
-      {showFilter && responsibilities.length > 0 && (
-        <FilterBar
-          responsibilities={responsibilities}
-          adults={members}
-          respFilter={respFilter}
-          ownerFilter={ownerFilter}
-          onRespChange={setRespFilter}
-          onOwnerChange={setOwnerFilter}
-          counts={filterCounts}
-        />
-      )}
-
-      {/* Empty state — filter-aware copy */}
-      {filteredOccurrences.length === 0 && (
+      {/* Empty state */}
+      {occurrences.length === 0 && (
         <div
           style={{
             textAlign: "center",
@@ -672,7 +576,7 @@ export default function TasksClient({
             <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
           </svg>
           <p style={{ fontFamily: "var(--font)", fontSize: "var(--text-base)", margin: 0 }}>
-            {filterActive ? "אין משימות באחריות זו" : "אין משימות פתוחות"}
+            אין משימות פתוחות
           </p>
         </div>
       )}
@@ -772,185 +676,6 @@ function groupOccurrences(occs: Occurrence[]) {
   });
 
   return { overdue, today, upcoming: upcomingCollapsed, noDate };
-}
-
-// Filter bar: אחריות chips (primary) + a compact owner segmented control
-// (secondary). The two cuts combine. Calm at 390px — chips wrap, owner sits on
-// its own labelled row.
-function FilterBar({
-  responsibilities,
-  adults,
-  respFilter,
-  ownerFilter,
-  onRespChange,
-  onOwnerChange,
-  counts,
-}: {
-  responsibilities: Responsibility[];
-  adults: FamilyMember[];
-  respFilter: RespFilter;
-  ownerFilter: OwnerFilter;
-  onRespChange: (f: RespFilter) => void;
-  onOwnerChange: (f: OwnerFilter) => void;
-  /** Open-task counts per filter label (per-label totals, filter-independent). */
-  counts: { all: number; none: number; resp: Record<string, number>; owner: Record<string, number> };
-}) {
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "var(--sp-3)", marginBottom: "var(--sp-6)" }}>
-      {/* אחריות chips */}
-      <div style={{ display: "flex", gap: "var(--sp-2)", flexWrap: "wrap" }}>
-        <FilterChip label="הכל" count={counts.all} active={respFilter === "all"} onClick={() => onRespChange("all")} />
-        {responsibilities.map((r) => (
-          <FilterChip
-            key={r.id}
-            label={r.name}
-            color={r.color}
-            count={counts.resp[r.id] ?? 0}
-            active={respFilter === r.id}
-            onClick={() => onRespChange(r.id)}
-          />
-        ))}
-        <FilterChip label="ללא אחריות" count={counts.none} active={respFilter === "none"} onClick={() => onRespChange("none")} />
-      </div>
-
-      {/* owner segmented control (secondary) */}
-      {adults.length > 0 && (
-        <div style={{ display: "flex", alignItems: "center", gap: "var(--sp-2)", flexWrap: "wrap" }}>
-          <span
-            style={{
-              fontFamily: "var(--font)",
-              fontSize: "var(--text-xs)",
-              fontWeight: 500,
-              color: "var(--text-muted)",
-            }}
-          >
-            בעלים
-          </span>
-          <div
-            style={{
-              display: "inline-flex",
-              padding: 3,
-              gap: 3,
-              background: "var(--bg)",
-              border: "1px solid var(--border)",
-              borderRadius: "var(--r-full)",
-            }}
-          >
-            <SegItem label="הכל" count={counts.all} active={ownerFilter === "all"} onClick={() => onOwnerChange("all")} />
-            {adults.map((a) => (
-              <SegItem
-                key={a.id}
-                label={a.name}
-                count={counts.owner[a.id] ?? 0}
-                active={ownerFilter === a.id}
-                onClick={() => onOwnerChange(a.id)}
-              />
-            ))}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-// Subtle inline open-task count: sits right after the chip's label, in the same
-// muted metadata weight, hidden entirely at 0. On a selected chip it inherits the
-// chip's (selected) foreground so it stays legible against the active fill.
-function InlineCount({ count, active }: { count: number; active: boolean }) {
-  if (count === 0) return null;
-  return (
-    <span
-      style={{
-        marginInlineStart: 4,
-        fontSize: 12,
-        fontWeight: 500,
-        color: active ? "inherit" : "var(--text-muted)",
-        fontVariantNumeric: "tabular-nums",
-      }}
-    >
-      {count}
-    </span>
-  );
-}
-
-function FilterChip({
-  label,
-  color,
-  count,
-  active,
-  onClick,
-}: {
-  label: string;
-  color?: string | null;
-  count?: number;
-  active: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      style={{
-        display: "inline-flex",
-        alignItems: "center",
-        gap: "var(--sp-1)",
-        padding: "6px 14px",
-        borderRadius: "var(--r-full)",
-        border: `1px solid ${active ? "var(--jmh-blue-30)" : "var(--border-strong)"}`,
-        background: active ? "var(--jmh-blue-05)" : "var(--surface)",
-        color: active ? "var(--jmh-blue)" : "var(--text-secondary)",
-        fontFamily: "var(--font)",
-        fontSize: "var(--text-sm)",
-        fontWeight: active ? 600 : 400,
-        cursor: "pointer",
-        transition: `all var(--dur-fast) var(--ease-out)`,
-      }}
-    >
-      {color && (
-        <span style={{ width: 7, height: 7, borderRadius: "50%", background: `var(--${color})`, flexShrink: 0 }} />
-      )}
-      {label}
-      {typeof count === "number" && <InlineCount count={count} active={active} />}
-    </button>
-  );
-}
-
-function SegItem({
-  label,
-  count,
-  active,
-  onClick,
-}: {
-  label: string;
-  count?: number;
-  active: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      style={{
-        display: "inline-flex",
-        alignItems: "center",
-        gap: "var(--sp-1)",
-        padding: "5px 12px",
-        borderRadius: "var(--r-full)",
-        border: "none",
-        background: active ? "var(--surface)" : "transparent",
-        color: active ? "var(--jmh-blue)" : "var(--text-muted)",
-        fontFamily: "var(--font)",
-        fontSize: "var(--text-sm)",
-        fontWeight: active ? 600 : 500,
-        cursor: "pointer",
-        boxShadow: active ? "var(--shadow-sm)" : "none",
-        transition: `all var(--dur-fast) var(--ease-out)`,
-      }}
-    >
-      {label}
-      {typeof count === "number" && <InlineCount count={count} active={active} />}
-    </button>
-  );
 }
 
 function Section({

@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getSessionUser } from "@/lib/currentUser";
 import { redirect } from "next/navigation";
 import { ALLOWED_EMAILS } from "@/lib/constants";
-import BottomNav from "@/components/ui/BottomNav";
+import TopTabs from "@/components/ui/TopTabs";
 import { NavBadge } from "@/components/ui/NavBadges";
 import RefreshOnFocus from "@/components/RefreshOnFocus";
 
@@ -32,22 +32,22 @@ export default async function AppLayout({
         display: "flex",
         flexDirection: "column",
         // viewport-fit:cover puts content under the notch/home indicator, so pad
-        // by the safe-area insets. Bottom also reserves room for the floating nav.
+        // by the safe-area insets.
         paddingTop: "env(safe-area-inset-top)",
-        paddingBottom: "calc(96px + env(safe-area-inset-bottom))",
+        paddingBottom: "env(safe-area-inset-bottom)",
       }}
     >
       <RefreshOnFocus />
-      <div style={{ flex: 1 }}>{children}</div>
-      {/* The nav paints immediately; only the badge slot suspends (fallback null)
-          and streams in. */}
-      <BottomNav
+      {/* The tabs paint immediately; only the badge slot suspends (fallback
+          null) and streams in. */}
+      <TopTabs
         tasksBadge={
           <Suspense fallback={null}>
-            <NavBadge kind="tasks" />
+            <NavBadge kind="tasks" inline />
           </Suspense>
         }
       />
+      <div style={{ flex: 1 }}>{children}</div>
     </div>
   );
 }

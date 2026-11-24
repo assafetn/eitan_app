@@ -136,7 +136,7 @@ export default function SettingsClient({ initialResponsibilities, initialLabels,
       {/* Header */}
       <div style={{ display: "flex", alignItems: "center", gap: "var(--sp-3)", marginBottom: "var(--sp-6)" }}>
         <Link
-          href="/home"
+          href="/chat"
           aria-label="חזרה"
           style={{
             display: "inline-flex",

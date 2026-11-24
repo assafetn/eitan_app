@@ -5,6 +5,7 @@ import { SendHorizontal } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import type { ChatMessage, FamilyMember } from "@/lib/types";
 import Toast from "@/components/ui/Toast";
+import { TOP_TABS_HEIGHT } from "@/components/ui/TopTabs";
 
 const SEND_FAILED = "השליחה נכשלה, הקישו על ההודעה כדי לנסות שוב";
 const EITAN_FAILED = "איתן לא הצליח לענות כרגע";
@@ -268,9 +269,9 @@ export default function ChatClient({ myMemberId, adults, initialMessages }: Prop
     <div
       dir="rtl"
       style={{
-        // Fill the space between the top safe area and the floating nav, so
-        // the thread scrolls inside and the composer stays put.
-        height: "calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 96px)",
+        // Fill the space below the top tabs, so the thread scrolls inside
+        // and the composer stays put.
+        height: `calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - ${TOP_TABS_HEIGHT}px)`,
         display: "flex",
         flexDirection: "column",
         maxWidth: 640,
@@ -278,21 +279,6 @@ export default function ChatClient({ myMemberId, adults, initialMessages }: Prop
         width: "100%",
       }}
     >
-      <header style={{ padding: "var(--sp-5) var(--sp-4) var(--sp-3)" }}>
-        <h1
-          style={{
-            fontFamily: "var(--font)",
-            fontSize: "var(--text-2xl)",
-            fontWeight: 700,
-            letterSpacing: "-0.03em",
-            color: "var(--text-primary)",
-            margin: 0,
-          }}
-        >
-          {ASSISTANT_NAME}
-        </h1>
-      </header>
-
       <div
         ref={scrollRef}
         onScroll={onScroll}
@@ -303,7 +289,7 @@ export default function ChatClient({ myMemberId, adults, initialMessages }: Prop
           flex: 1,
           overflowY: "auto",
           overscrollBehavior: "contain",
-          padding: "0 var(--sp-4) var(--sp-3)",
+          padding: "var(--sp-3) var(--sp-4)",
           display: "flex",
           flexDirection: "column",
           gap: 2,

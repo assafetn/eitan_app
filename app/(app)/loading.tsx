@@ -7,7 +7,7 @@
 // loading.tsx IS that boundary: navigation now swaps to this skeleton
 // instantly (and it's prefetched), while the real page streams in behind it.
 //
-// The shared layout — including <BottomNav> — stays mounted; only this page
+// The shared layout — including <TopTabs> — stays mounted; only this page
 // area is replaced. Tokens only, RTL inherited from <html dir="rtl">.
 
 // A single grey placeholder bar. `w` is a CSS width (e.g. "45%", 20).

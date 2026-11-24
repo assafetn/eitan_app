@@ -51,9 +51,10 @@ export const getNavBadgeCounts = cache(async (): Promise<{ tasks: number }> => {
   return { tasks: tasksRes.count ?? 0 };
 });
 
-// Async server component rendered (Suspense-wrapped) into a nav icon's corner.
-// Returns null when the count is 0 so nothing renders — never a zero badge.
-export async function NavBadge({ kind }: { kind: "tasks" }) {
+// Async server component rendered (Suspense-wrapped) next to a tab's label
+// (inline), or into an icon's corner. Returns null when the count is 0 so
+// nothing renders — never a zero badge.
+export async function NavBadge({ kind, inline = false }: { kind: "tasks"; inline?: boolean }) {
   const counts = await getNavBadgeCounts();
   const count = counts[kind];
   if (count <= 0) return null;
@@ -83,9 +84,9 @@ export async function NavBadge({ kind }: { kind: "tasks" }) {
       <span
         aria-hidden="true"
         style={{
-          position: "absolute",
-          top: -6,
-          insetInlineStart: -6, // top-start corner (top-right in RTL)
+          ...(inline
+            ? { position: "static" as const }
+            : { position: "absolute" as const, top: -6, insetInlineStart: -6 }), // top-start corner (top-right in RTL)
           minWidth: 16,
           height: 16,
           paddingInline: display.length > 1 ? 4 : 0,

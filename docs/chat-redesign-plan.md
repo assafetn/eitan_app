@@ -82,7 +82,7 @@ The UI is secondary. The chat is the product. Feel reference: "zero-UI" texting 
      - **publish the OAuth app.** In "Testing" mode, refresh tokens expire after 7 days.
 5. **Memory: DONE (2026-11-24).** Migration `018_memories.sql` (applied). Tools `remember_fact` (with `replaces_memory_id` for corrections) and `forget_fact` in `lib/eitan/tools.ts`. Every turn loads all facts (up to 200) into the context block. Eitan saves clear, lasting facts on its own as well as on "תזכור ש…", and announces each one ("📌 זכרתי" / "🗑️ שכחתי"). If the Google Calendar stash is restored, rename its migration 018 to 019.
 6. **Voice: DROPPED (2026-11-24).** An in-app 🎤 button using the phone's speech recognition (Web Speech API, `he-IL`) was built and then removed. On the real phones it caught only a few words, stopped, lost the text and wouldn't restart, even after a fix that chained short sessions. The user chose not to pay for a speech-to-text service and instead uses the mic on the phone's keyboard (Gboard / iPhone keyboard), which already works in the message box. If voice comes back: record audio in the browser and transcribe on the server (OpenAI or ElevenLabs Hebrew STT).
-7. **Cleanup.** Retire the old home dashboard. Keep the task list as a secondary "רשימה" tab or remove it.
+7. **Cleanup: DONE (2026-11-24).** The old home dashboard is gone (`/home` now redirects to `/chat`, so old bookmarks and installed apps still work). The floating bottom nav was replaced by two tabs at the top, צ׳אט and משימות, plus a settings gear (`components/ui/TopTabs.tsx`). Family is reached from Settings. The task list lost its responsibility and owner filter tabs.
 
 ## Data model additions (planned)
 
