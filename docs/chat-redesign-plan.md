@@ -69,7 +69,7 @@ The UI is secondary. The chat is the product. Feel reference: "zero-UI" texting 
    - the cron posts due reminders and the morning digest into the chat, as well as pushing them
    - tapping a push opens the chat
    - "בוצע" completes
-4. **Google Calendar.**
+4. **Google Calendar: DEFERRED (2026-11-24).** The code is written but untested. It's kept in a local git stash named "step 4: Google Calendar". To resume: `git stash list`, then `git stash apply`. It still needs `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` (in Vercel and `.env.local`), then migration 018. The privacy page it needed is already live (`/privacy`).
    - a "Connect Google Calendar" button in Settings for each adult (our own OAuth flow, separate from login)
    - token storage
    - read both calendars

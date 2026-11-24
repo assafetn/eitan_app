@@ -13,6 +13,11 @@ export const dynamic = "force-dynamic";
 // Must match the scheduler: the job runs every 5 minutes, and each run covers
 // the next 5. A reminder therefore fires at most 5 minutes early.
 const WINDOW_MINUTES = 5;
+// Also look BACK this far. A reminder created a few seconds after a run (e.g.
+// "remind me in 2 minutes" at 16:45:08 for 16:46) would otherwise fall between
+// runs and never fire. Everything is deduped (notification_log for pushes,
+// meta.dedupe_key for chat), so looking back can't double-send.
+const LOOKBACK_MINUTES = 15;
 const DEFAULT_DIGEST_TIME = "07:00";
 const DIGEST_BODY_MAX_LINES = 5;
 const UNASSIGNED_LABEL = "לא משויך";
@@ -144,9 +149,9 @@ async function handle(request: Request): Promise<NextResponse> {
 
   const todayISO = clock.todayISO;
   const windowEnd = nowMinutes + WINDOW_MINUTES;
-  // Deliberately does not wrap across midnight: a 23:55 window ends at 24:10 and
-  // simply matches nothing above 23:59.
-  const inWindow = (minutes: number) => minutes >= nowMinutes && minutes < windowEnd;
+  // Deliberately does not wrap across midnight: a 23:55 window ends at 24:00 and
+  // simply matches nothing above 23:59; the look-back stops at 00:00 too.
+  const inWindow = (minutes: number) => minutes >= nowMinutes - LOOKBACK_MINUTES && minutes < windowEnd;
 
   const errors: string[] = [];
   let supabase: SupabaseClient;

@@ -11,6 +11,14 @@ const MODEL = "claude-opus-5-5";
 const HISTORY_MESSAGES = 30;
 const MAX_TOOL_ROUNDS = 8;
 
+type Effort = "low" | "medium" | "high";
+// EITAN_EFFORT overrides for experiments. Default "low", measured 2026-11-24
+// on the same 4 test messages: medium took 3.4–11.2s (avg 7.3s), low took
+// 4.0–6.3s (avg 5.4s), with equally correct dates, tools and confirmations.
+const EFFORT: Effort = (["low", "medium", "high"] as const).includes(process.env.EITAN_EFFORT as Effort)
+  ? (process.env.EITAN_EFFORT as Effort)
+  : "low";
+
 const FALLBACK_REPLY = "סליחה, משהו השתבש אצלי. אפשר לנסות שוב?";
 
 let client: Anthropic | null = null;
@@ -21,7 +29,17 @@ function anthropic(): Anthropic {
   return client;
 }
 
-/** Chat rows (oldest first) → Messages API turns. Must start with a user turn. */
+/** "[2026-11-23 23:27]" — when a message was sent, in Israel time. */
+function sentAt(iso: string): string {
+  const { date, time } = jerusalemNow(new Date(iso));
+  return `[${date} ${time}]`;
+}
+
+/**
+ * Chat rows (oldest first) → Messages API turns. Must start with a user turn.
+ * Each adult message carries its send time, so "מחר" written last night is
+ * read relative to last night, not to today.
+ */
 function toMessages(history: ChatMessage[], nameById: Map<string, string>): Anthropic.Beta.BetaMessageParam[] {
   const out: Anthropic.Beta.BetaMessageParam[] = [];
   for (const m of history) {
@@ -30,7 +48,7 @@ function toMessages(history: ChatMessage[], nameById: Map<string, string>): Anth
       out.push({ role: "assistant", content: m.body });
     } else {
       const name = (m.author_id && nameById.get(m.author_id)) || "מישהו";
-      out.push({ role: "user", content: `${name}: ${m.body}` });
+      out.push({ role: "user", content: `${sentAt(m.created_at)} ${name}: ${m.body}` });
     }
   }
   return out;
@@ -53,14 +71,16 @@ export async function runEitan(
   const messages = toMessages(history.slice(-HISTORY_MESSAGES), nameById);
   if (messages.length === 0) return { reply: null, taskIds: [] };
 
+  const t0 = Date.now();
   const snapshot = await openItemsSnapshot(full);
+  const tSnapshot = Date.now() - t0;
 
   try {
-    const final = await anthropic().beta.messages.toolRunner({
+    const runner = anthropic().beta.messages.toolRunner({
       model: MODEL,
       max_tokens: 16000,
-      // Chat replies: keep thinking light. Opus 5.5 defaults to medium.
-      output_config: { effort: "medium" },
+      // Thinking depth: the main speed/quality dial for chat (see EFFORT).
+      output_config: { effort: EFFORT },
       // On a safety decline, the API re-runs the request on a fallback model.
       betas: ["server-side-fallback-2026-07-01"],
       fallbacks: "default",
@@ -74,6 +94,23 @@ export async function runEitan(
       tools: makeTools(full),
       messages,
     });
+
+    // Iterate round by round so each model call can be timed.
+    let final: Anthropic.Beta.BetaMessage | null = null;
+    const rounds: string[] = [];
+    let tPrev = Date.now();
+    for await (const msg of runner) {
+      const u = msg.usage;
+      rounds.push(
+        `${Date.now() - tPrev}ms in=${u.input_tokens} cache_read=${u.cache_read_input_tokens ?? 0} out=${u.output_tokens} stop=${msg.stop_reason}`
+      );
+      tPrev = Date.now();
+      final = msg;
+    }
+    console.log(
+      `[eitan] effort=${EFFORT} total=${Date.now() - t0}ms snapshot=${tSnapshot}ms rounds=${rounds.length} | ${rounds.join(" | ")}`
+    );
+    if (!final) throw new Error("runner produced no message");
 
     if (final.stop_reason === "refusal") {
       return { reply: "את זה אני לא יכול לעשות. אפשר לנסח אחרת?", taskIds: [...full.touchedTaskIds] };
