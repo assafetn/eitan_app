@@ -21,6 +21,8 @@ export interface EitanContext {
   today: string;
   /** Task ids created/changed this turn — stored on the reply for later steps. */
   touchedTaskIds: Set<string>;
+  /** The chat message being answered (recorded as a memory's source). */
+  messageId?: string | null;
 }
 
 const TASK_SELECT =
@@ -85,6 +87,22 @@ export async function openItemsSnapshot(ctx: EitanContext, cap = 60) {
     items: occ.slice(0, cap).map((o) => ({ ...describe(o, ctx), overdue: !!o.date && o.date < ctx.today })),
     truncated: occ.length > cap,
   };
+}
+
+/** Everything Eitan remembers about the family, oldest first (capped). */
+export async function loadMemories(ctx: EitanContext, cap = 200) {
+  const { data, error } = await ctx.supabase
+    .from("memories")
+    .select("id, fact, about_member_id")
+    .order("created_at", { ascending: true })
+    .limit(cap);
+  if (error) throw new Error(`load memories failed: ${error.message}`);
+  const people = [...ctx.adults, ...ctx.children];
+  return ((data as { id: string; fact: string; about_member_id: string | null }[]) ?? []).map((m) => ({
+    memory_id: m.id,
+    fact: m.fact,
+    about: m.about_member_id ? people.find((p) => p.id === m.about_member_id)?.name ?? null : null,
+  }));
 }
 
 // ── input normalisation ──────────────────────────────────
@@ -389,5 +407,68 @@ export function makeTools(ctx: EitanContext) {
     },
   });
 
-  return [listTasks, createTask, updateTask, setDone, deleteTask];
+  const people = () => [...ctx.adults, ...ctx.children];
+
+  const rememberFact = betaTool({
+    name: "remember_fact",
+    description:
+      "Save (or correct) a lasting fact about the family, so it is known in every future conversation. Pass replaces_memory_id to correct or update an existing fact instead of adding a duplicate.",
+    strict: true,
+    inputSchema: {
+      type: "object",
+      properties: {
+        fact: { type: "string", description: "One short, self-contained Hebrew sentence, e.g. 'נועה אלרגית לבוטנים'." },
+        about_member_id: { type: ["string", "null"], description: "Id of the family member it is about (adult or child), or null." },
+        replaces_memory_id: { type: ["string", "null"], description: "memory_id of the fact this one corrects, or null for a new fact." },
+      },
+      required: ["fact", "about_member_id", "replaces_memory_id"],
+      additionalProperties: false,
+    },
+    run: async (input) => {
+      const fact = input.fact.trim();
+      if (!fact) return fail("fact is empty");
+      if (fact.length > 500) return fail("fact is too long (max 500 characters)");
+      if (input.about_member_id && !people().some((p) => p.id === input.about_member_id)) return fail("unknown about_member_id");
+
+      if (input.replaces_memory_id) {
+        const { data, error } = await ctx.supabase
+          .from("memories")
+          .update({ fact, about_member_id: input.about_member_id, updated_at: new Date().toISOString() })
+          .eq("id", input.replaces_memory_id)
+          .select("id");
+        if (error) return fail(`save failed: ${error.message}`);
+        if (!data || data.length === 0) return fail("memory not found");
+        return ok({ updated: fact });
+      }
+
+      const { error } = await ctx.supabase.from("memories").insert({
+        fact,
+        about_member_id: input.about_member_id,
+        source_message_id: ctx.messageId ?? null,
+        created_by: ctx.sender.id,
+      });
+      if (error) return fail(`save failed: ${error.message}`);
+      return ok({ saved: fact });
+    },
+  });
+
+  const forgetFact = betaTool({
+    name: "forget_fact",
+    description: "Remove a saved fact when an adult asks to forget it, or when it is no longer true.",
+    strict: true,
+    inputSchema: {
+      type: "object",
+      properties: { memory_id: { type: "string" } },
+      required: ["memory_id"],
+      additionalProperties: false,
+    },
+    run: async (input) => {
+      const { data, error } = await ctx.supabase.from("memories").delete().eq("id", input.memory_id).select("fact");
+      if (error) return fail(`delete failed: ${error.message}`);
+      if (!data || data.length === 0) return fail("memory not found");
+      return ok({ forgotten: (data[0] as { fact: string }).fact });
+    },
+  });
+
+  return [listTasks, createTask, updateTask, setDone, deleteTask, rememberFact, forgetFact];
 }

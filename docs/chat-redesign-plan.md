@@ -80,7 +80,7 @@ The UI is secondary. The chat is the product. Feel reference: "zero-UI" texting 
      - add the calendar scope
      - add a redirect URI
      - **publish the OAuth app.** In "Testing" mode, refresh tokens expire after 7 days.
-5. **Memory.** `memories` table, remember / forget / list tools, injected into the prompt.
+5. **Memory: DONE (2026-11-24).** Migration `018_memories.sql` (applied). Tools `remember_fact` (with `replaces_memory_id` for corrections) and `forget_fact` in `lib/eitan/tools.ts`. Every turn loads all facts (up to 200) into the context block. Eitan saves clear, lasting facts on its own as well as on "תזכור ש…", and announces each one ("📌 זכרתי" / "🗑️ שכחתי"). If the Google Calendar stash is restored, rename its migration 018 to 019.
 6. **Voice messages.** Record, upload, transcribe (Hebrew), then the same pipeline.
 7. **Cleanup.** Retire the old home dashboard. Keep the task list as a secondary "רשימה" tab or remove it.
 

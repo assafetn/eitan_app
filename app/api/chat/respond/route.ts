@@ -94,7 +94,7 @@ export async function POST(request: Request) {
   const history = ((historyDesc as ChatMessage[]) ?? []).slice().reverse();
 
   const result = await runEitan(
-    { supabase, sender, otherAdult: adults.find((a) => a.id !== me.id) ?? null, adults, children },
+    { supabase, sender, otherAdult: adults.find((a) => a.id !== me.id) ?? null, adults, children, messageId: msg.id },
     history,
     recentReminders
   );

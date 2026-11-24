@@ -3,7 +3,7 @@
 
 import Anthropic from "@anthropic-ai/sdk";
 import type { ChatMessage } from "@/lib/types";
-import { makeTools, openItemsSnapshot, type EitanContext } from "./tools";
+import { loadMemories, makeTools, openItemsSnapshot, type EitanContext } from "./tools";
 import { contextBlock, SILENT_TOKEN, STATIC_SYSTEM, type RecentReminder } from "./prompt";
 import { jerusalemNow } from "./time";
 
@@ -72,7 +72,7 @@ export async function runEitan(
   if (messages.length === 0) return { reply: null, taskIds: [] };
 
   const t0 = Date.now();
-  const snapshot = await openItemsSnapshot(full);
+  const [snapshot, memories] = await Promise.all([openItemsSnapshot(full), loadMemories(full)]);
   const tSnapshot = Date.now() - t0;
 
   try {
@@ -89,7 +89,7 @@ export async function runEitan(
       max_iterations: MAX_TOOL_ROUNDS,
       system: [
         { type: "text", text: STATIC_SYSTEM, cache_control: { type: "ephemeral" } },
-        { type: "text", text: contextBlock(full, now.time, snapshot, recentReminders) },
+        { type: "text", text: contextBlock(full, now.time, snapshot, recentReminders, memories) },
       ],
       tools: makeTools(full),
       messages,
