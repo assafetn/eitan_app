@@ -1,11 +1,13 @@
 import { createClient } from "@/lib/supabase/server";
 import type { FamilyMember, OccurrenceOverride, Task } from "@/lib/types";
+import { getSessionMember } from "@/lib/currentUser";
 import TasksClient from "./TasksClient";
 
 export const dynamic = "force-dynamic";
 
 export default async function TasksPage() {
   const supabase = await createClient();
+  const me = await getSessionMember();
 
   // Primary rows = singles + recurring series parents (recurrence_parent_id is null).
   // Recurring parents are fetched regardless of status (we never complete the
@@ -49,6 +51,7 @@ export default async function TasksPage() {
       initialOverrides={(overrides as OccurrenceOverride[]) ?? []}
       members={adults}
       childMembers={(children as FamilyMember[]) ?? []}
+      myMemberId={me?.type === "adult" ? me.id : null}
     />
   );
 }

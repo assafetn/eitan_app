@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import type {
   FamilyMember,
@@ -13,6 +13,7 @@ import type {
 import { addDaysISO, expandOccurrences, isCompletedOccurrenceVisible, todayISO } from "@/lib/recurrence";
 import { useCoalescedRefresh } from "@/lib/useCoalescedRefresh";
 import TaskRow from "@/components/ui/TaskRow";
+import SwipeToDelete from "@/components/ui/SwipeToDelete";
 import AddTaskModal from "@/components/ui/AddTaskModal";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import Toast from "@/components/ui/Toast";
@@ -32,7 +33,13 @@ interface Props {
   showAddButton?: boolean;
   /** When true, completed occurrences are hidden entirely (open-only view). */
   openOnly?: boolean;
+  /** The signed-in adult. When set, shows the "המשימות שלי / כל המשימות"
+   *  filter; "mine" = tasks they own alone plus shared ones. */
+  myMemberId?: string | null;
 }
+
+type OwnerView = "mine" | "all";
+const OWNER_VIEW_KEY = "eitan.tasks.view";
 
 const HORIZON_DAYS = 90;
 
@@ -54,6 +61,7 @@ export default function TasksClient({
   title = "משימות",
   showAddButton = true,
   openOnly = false,
+  myMemberId = null,
 }: Props) {
   const [tasks, setTasks] = useState<Task[]>(initialTasks);
   const [overrides, setOverrides] = useState<OccurrenceOverride[]>(initialOverrides);
@@ -117,9 +125,38 @@ export default function TasksClient({
     return out;
   }, [tasks, overrides, openOnly]);
 
+  // "המשימות שלי" by default; the choice is remembered on this device.
+  const [view, setView] = useState<OwnerView>("mine");
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(OWNER_VIEW_KEY);
+      if (saved === "mine" || saved === "all") setView(saved);
+    } catch {
+      // storage unavailable: keep the default
+    }
+  }, []);
+  const chooseView = (v: OwnerView) => {
+    setView(v);
+    try {
+      localStorage.setItem(OWNER_VIEW_KEY, v);
+    } catch {
+      // ignore
+    }
+  };
+  const filterMine = !!myMemberId && view === "mine";
+  const visible = useMemo(
+    () =>
+      filterMine
+        ? occurrences.filter(
+            (o) => o.task.is_shared || o.task.assignee_id === myMemberId || !o.task.assignee_id
+          )
+        : occurrences,
+    [occurrences, filterMine, myMemberId]
+  );
+
   const { overdue, today, upcoming, noDate } = useMemo(
-    () => groupOccurrences(occurrences),
-    [occurrences]
+    () => groupOccurrences(visible),
+    [visible]
   );
 
   async function getMyMemberId(supabase: ReturnType<typeof createClient>): Promise<string | null> {
@@ -379,8 +416,8 @@ export default function TasksClient({
 
   function renderRow(occ: Occurrence) {
     return (
+      <SwipeToDelete key={occ.key} onDelete={() => setPendingDelete(occ)}>
       <TaskRow
-        key={occ.key}
         task={occ.task}
         adults={members}
         date={occ.date}
@@ -389,6 +426,7 @@ export default function TasksClient({
         onToggle={() => toggleOccurrence(occ)}
         onEdit={() => setEditingTask(occ.task)}
       />
+      </SwipeToDelete>
     );
   }
 
@@ -462,8 +500,10 @@ export default function TasksClient({
         )}
       </div>
 
+      {myMemberId && <OwnerViewToggle value={view} onChange={chooseView} />}
+
       {/* Empty state */}
-      {occurrences.length === 0 && (
+      {visible.length === 0 && (
         <div
           style={{
             textAlign: "center",
@@ -486,7 +526,7 @@ export default function TasksClient({
             <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
           </svg>
           <p style={{ fontFamily: "var(--font)", fontSize: "var(--text-base)", margin: 0 }}>
-            אין משימות פתוחות
+            {filterMine ? "אין לך משימות פתוחות" : "אין משימות פתוחות"}
           </p>
         </div>
       )}
@@ -540,6 +580,57 @@ export default function TasksClient({
       )}
 
       <Toast message={toast} onDismiss={() => setToast(null)} />
+    </div>
+  );
+}
+
+// "המשימות שלי" / "כל המשימות" — a two-option pill track like the top tabs.
+function OwnerViewToggle({ value, onChange }: { value: OwnerView; onChange: (v: OwnerView) => void }) {
+  const options: { v: OwnerView; label: string }[] = [
+    { v: "mine", label: "המשימות שלי" },
+    { v: "all", label: "כל המשימות" },
+  ];
+  return (
+    <div
+      role="radiogroup"
+      aria-label="אילו משימות להציג"
+      style={{
+        display: "flex",
+        gap: 4,
+        padding: 4,
+        marginBottom: "var(--sp-5)",
+        background: "var(--surface)",
+        border: "1px solid var(--border)",
+        borderRadius: "var(--r-full)",
+      }}
+    >
+      {options.map((o) => {
+        const active = value === o.v;
+        return (
+          <button
+            key={o.v}
+            type="button"
+            role="radio"
+            aria-checked={active}
+            onClick={() => onChange(o.v)}
+            style={{
+              flex: 1,
+              minHeight: 36,
+              border: "none",
+              borderRadius: "var(--r-full)",
+              background: active ? "var(--jmh-blue-05)" : "transparent",
+              color: active ? "var(--jmh-blue)" : "var(--text-secondary)",
+              fontFamily: "var(--font)",
+              fontSize: "var(--text-sm)",
+              fontWeight: active ? 600 : 500,
+              cursor: "pointer",
+              transition: "background var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out)",
+            }}
+          >
+            {o.label}
+          </button>
+        );
+      })}
     </div>
   );
 }
