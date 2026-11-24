@@ -27,7 +27,7 @@ The UI is secondary. The chat is the product. Feel reference: "zero-UI" texting 
 | Calendar writes | **Opt-in only.** Eitan writes to Google only when asked ("תוסיף ליומן") or when someone taps the **📅 הוסף ליומן** button under a confirmation. Never on its own |
 | Calendar reads | Eitan reads both calendars for answers and the morning digest. Reading never changes anything |
 | Memory | A `memories` table of family facts. Eitan says when it saves one ("📌 זכרתי: …"). "מה אתה זוכר?" and "תשכח את…" work. The whole list goes into the prompt (small data, no vector search) |
-| Voice | Browser recording → Supabase Storage → Hebrew speech-to-text (a separate provider, since Claude doesn't take audio) → the same pipeline as text. The transcript is shown under the voice bubble |
+| Voice | Phone dictation (Web Speech API, `he-IL`) fills the message box; nothing is recorded or stored. Recorded audio plus a speech-to-text API stays a fallback |
 
 ## Calendar rules (when a write is requested)
 
@@ -81,7 +81,7 @@ The UI is secondary. The chat is the product. Feel reference: "zero-UI" texting 
      - add a redirect URI
      - **publish the OAuth app.** In "Testing" mode, refresh tokens expire after 7 days.
 5. **Memory: DONE (2026-11-24).** Migration `018_memories.sql` (applied). Tools `remember_fact` (with `replaces_memory_id` for corrections) and `forget_fact` in `lib/eitan/tools.ts`. Every turn loads all facts (up to 200) into the context block. Eitan saves clear, lasting facts on its own as well as on "תזכור ש…", and announces each one ("📌 זכרתי" / "🗑️ שכחתי"). If the Google Calendar stash is restored, rename its migration 018 to 019.
-6. **Voice messages.** Record, upload, transcribe (Hebrew), then the same pipeline.
+6. **Voice: DONE (2026-11-24) as phone dictation.** The user chose the phone's own speech recognition (Web Speech API, `he-IL`) over a paid speech-to-text service: no key, no cost, no audio stored. A 🎤 button next to send (`components/chat/useDictation.ts`) fills the message box live as you speak; you review and send as usual. One phrase per tap, and tapping again appends. The button only shows where the browser supports it. If accuracy or iPhone support disappoints, the fallback is a recorded audio message plus a Hebrew STT API (OpenAI or ElevenLabs).
 7. **Cleanup.** Retire the old home dashboard. Keep the task list as a secondary "רשימה" tab or remove it.
 
 ## Data model additions (planned)

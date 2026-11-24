@@ -263,6 +263,18 @@ select:focus-visible {
   animation: pulse-dot 1.6s ease-in-out infinite;
 }
 
+/* Chat mic button while dictating: a soft expanding ring. */
+@keyframes mic-ring {
+  0% { box-shadow: 0 0 0 0 color-mix(in oklch, var(--jmh-coral) 45%, transparent); }
+  100% { box-shadow: 0 0 0 10px color-mix(in oklch, var(--jmh-coral) 0%, transparent); }
+}
+.mic-listening {
+  animation: mic-ring 1.2s var(--ease-out) infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .mic-listening { animation: none; }
+}
+
 /* Route-loading skeleton placeholder (opacity pulse only — no new colors). */
 @keyframes skeleton-pulse {
   0%, 100% { opacity: 1; }

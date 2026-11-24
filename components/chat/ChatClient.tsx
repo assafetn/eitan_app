@@ -1,13 +1,16 @@
 "use client";
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { SendHorizontal } from "lucide-react";
+import { Mic, SendHorizontal, Square } from "lucide-react";
+import { useDictation } from "./useDictation";
 import { createClient } from "@/lib/supabase/client";
 import type { ChatMessage, FamilyMember } from "@/lib/types";
 import Toast from "@/components/ui/Toast";
 
 const SEND_FAILED = "השליחה נכשלה, הקישו על ההודעה כדי לנסות שוב";
 const EITAN_FAILED = "איתן לא הצליח לענות כרגע";
+const MIC_DENIED = "אין גישה למיקרופון. אפשר לאשר אותה בהגדרות הדפדפן";
+const MIC_FAILED = "ההכתבה לא עבדה, נסו שוב";
 const ASSISTANT_NAME = "איתן";
 const TZ = "Asia/Jerusalem";
 // Within this many px of the bottom counts as "reading the latest" — new
@@ -165,7 +168,8 @@ export default function ChatClient({ myMemberId, adults, initialMessages }: Prop
     const el = inputRef.current;
     if (!el) return;
     el.style.height = "auto";
-    el.style.height = `${Math.min(el.scrollHeight, 140)}px`;
+    // scrollHeight excludes the border; add it back or a 1-line box scrolls.
+    el.style.height = `${Math.min(el.scrollHeight + el.offsetHeight - el.clientHeight, 140)}px`;
   };
 
   // Ask Eitan to handle a message we just posted. His reply arrives through
@@ -224,7 +228,20 @@ export default function ChatClient({ myMemberId, adults, initialMessages }: Prop
     [supabase, upsert, askEitan]
   );
 
+  const dictation = useDictation({
+    onText: (text) => {
+      setDraft(text.slice(0, MAX_LEN));
+      requestAnimationFrame(autoGrow);
+    },
+    onError: (kind) => setToast(kind === "denied" ? MIC_DENIED : MIC_FAILED),
+  });
+  const toggleDictation = () => {
+    if (dictation.listening) dictation.stop();
+    else dictation.start(draft);
+  };
+
   const send = () => {
+    if (dictation.listening) dictation.stop();
     const body = draft.trim().slice(0, MAX_LEN);
     if (!body || !myMemberId) return;
     const clientId = newClientId();
@@ -352,7 +369,7 @@ export default function ChatClient({ myMemberId, adults, initialMessages }: Prop
           rows={1}
           maxLength={MAX_LEN}
           dir="auto"
-          placeholder="כתבו לאיתן…"
+          placeholder={dictation.listening ? "מקשיב…" : "כתבו לאיתן…"}
           aria-label="הודעה"
           style={{
             flex: 1,
@@ -371,6 +388,30 @@ export default function ChatClient({ myMemberId, adults, initialMessages }: Prop
             maxHeight: 140,
           }}
         />
+        {dictation.supported && (
+          <button
+            type="button"
+            onClick={toggleDictation}
+            aria-label={dictation.listening ? "עצירת הכתבה" : "הכתבה קולית"}
+            aria-pressed={dictation.listening}
+            className={dictation.listening ? "mic-listening" : undefined}
+            style={{
+              flexShrink: 0,
+              width: 44,
+              height: 44,
+              borderRadius: "var(--r-full)",
+              border: dictation.listening ? "none" : "1px solid var(--border)",
+              display: "grid",
+              placeItems: "center",
+              background: dictation.listening ? "var(--jmh-coral)" : "var(--surface)",
+              color: dictation.listening ? "var(--text-on-blue)" : "var(--text-secondary)",
+              cursor: "pointer",
+              transition: "background var(--dur-fast) var(--ease-out)",
+            }}
+          >
+            {dictation.listening ? <Square size={16} strokeWidth={2.5} fill="currentColor" /> : <Mic size={20} strokeWidth={2} />}
+          </button>
+        )}
         <button
           type="submit"
           disabled={!canSend}
