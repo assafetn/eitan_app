@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getSessionMember, getSessionUser } from "@/lib/currentUser";
+import { deviceClass, pushService } from "@/lib/pushDevice";
 
 // web-push (and anything importing lib/push) needs Node crypto.
 export const runtime = "nodejs";
@@ -56,6 +57,31 @@ export async function POST(request: Request) {
     console.error("[push/subscribe] upsert failed:", upsertError.message);
     return NextResponse.json({ error: "could not save subscription" }, { status: 500 });
   }
+
+  // Replace, don't accumulate: drop this member's OTHER subscriptions for the
+  // same kind of device on the same push service. A re-added iPhone app gets a
+  // new endpoint, and Apple keeps answering 201 for the old one while never
+  // delivering it, so the old row would silently swallow every reminder.
+  const ua = request.headers.get("user-agent");
+  const { data: others } = await supabase
+    .from("push_subscriptions")
+    .select("id, endpoint, user_agent")
+    .eq("member_id", member.id)
+    .neq("endpoint", endpoint);
+  const stale = ((others as { id: string; endpoint: string; user_agent: string | null }[]) ?? []).filter(
+    (s) => pushService(s.endpoint) === pushService(endpoint) && deviceClass(s.user_agent) === deviceClass(ua)
+  );
+  if (stale.length) {
+    const { error: pruneError } = await supabase
+      .from("push_subscriptions")
+      .delete()
+      .in("id", stale.map((s) => s.id));
+    if (pruneError) console.error("[push/subscribe] could not remove old subscriptions:", pruneError.message);
+  }
+
+  // A silent re-sync on app open only refreshes the row; it must not turn
+  // reminders back on for someone who switched them off.
+  if ((payload as { sync?: unknown }).sync === true) return NextResponse.json({ ok: true, replaced: stale.length });
 
   const { error: flagError } = await supabase
     .from("family_members")

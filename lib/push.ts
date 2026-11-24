@@ -66,7 +66,10 @@ export async function sendPushToMember(
       try {
         await webpush.sendNotification(
           { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
-          body
+          body,
+          // urgency "high": deliver now even in low-power mode (Apple otherwise
+          // may hold it back). TTL: a reminder more than 6h late is useless.
+          { urgency: "high", TTL: 6 * 3600 }
         );
         result.sent += 1;
         await supabase

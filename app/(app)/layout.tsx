@@ -6,6 +6,7 @@ import { ALLOWED_EMAILS } from "@/lib/constants";
 import TopTabs from "@/components/ui/TopTabs";
 import { NavBadge } from "@/components/ui/NavBadges";
 import RefreshOnFocus from "@/components/RefreshOnFocus";
+import PushSync from "@/components/PushSync";
 
 export default async function AppLayout({
   children,
@@ -38,6 +39,7 @@ export default async function AppLayout({
       }}
     >
       <RefreshOnFocus />
+      <PushSync />
       {/* The tabs paint immediately; only the badge slot suspends (fallback
           null) and streams in. */}
       <TopTabs
