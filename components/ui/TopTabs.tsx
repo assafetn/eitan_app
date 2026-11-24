@@ -8,8 +8,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Settings } from "lucide-react";
 
-/** Height of the bar below the top safe area. Screens that fill the viewport
- * (the chat) subtract it. */
+/** Height of the bar below the top safe area. */
 export const TOP_TABS_HEIGHT = 56;
 
 const tabs = [
@@ -31,9 +30,10 @@ export default function TopTabs({
     <nav
       aria-label="ניווט ראשי"
       style={{
-        position: "sticky",
-        top: "env(safe-area-inset-top)",
+        // Part of the app frame (AppShell), above the scrolling content.
+        position: "relative",
         zIndex: 50,
+        flexShrink: 0,
         height: TOP_TABS_HEIGHT,
         boxSizing: "border-box",
         display: "flex",

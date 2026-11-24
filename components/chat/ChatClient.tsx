@@ -5,7 +5,6 @@ import { SendHorizontal } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import type { ChatMessage, FamilyMember } from "@/lib/types";
 import Toast from "@/components/ui/Toast";
-import { TOP_TABS_HEIGHT } from "@/components/ui/TopTabs";
 
 const SEND_FAILED = "השליחה נכשלה, הקישו על ההודעה כדי לנסות שוב";
 const EITAN_FAILED = "איתן לא הצליח לענות כרגע";
@@ -161,32 +160,6 @@ export default function ChatClient({ myMemberId, adults, initialMessages }: Prop
     if (el && stickToBottomRef.current) el.scrollTop = el.scrollHeight;
   }, [messages, eitanBusy]);
 
-  // ── keyboard ──
-  // iOS doesn't shrink the page when the keyboard opens; it slides the whole
-  // view up instead, pushing the tabs off screen. Track the keyboard's height
-  // through visualViewport, lift the chat's bottom edge by that much, and undo
-  // the slide, so only the thread shrinks — the way a native chat behaves.
-  const [keyboardInset, setKeyboardInset] = useState(0);
-  useEffect(() => {
-    const vv = window.visualViewport;
-    if (!vv) return;
-    const update = () => {
-      const inset = Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop));
-      // Ignore small differences (browser toolbars), only a keyboard counts.
-      setKeyboardInset(inset > 80 ? inset : 0);
-      if (vv.offsetTop > 0) window.scrollTo(0, 0);
-      const el = scrollRef.current;
-      if (el && stickToBottomRef.current) el.scrollTop = el.scrollHeight;
-    };
-    update();
-    vv.addEventListener("resize", update);
-    vv.addEventListener("scroll", update);
-    return () => {
-      vv.removeEventListener("resize", update);
-      vv.removeEventListener("scroll", update);
-    };
-  }, []);
-
   // ── composer ──
   const autoGrow = () => {
     const el = inputRef.current;
@@ -295,14 +268,11 @@ export default function ChatClient({ myMemberId, adults, initialMessages }: Prop
     <div
       dir="rtl"
       style={{
-        // Pinned between the top tabs and the bottom of the screen (or the top
-        // of the keyboard), like a native chat. Not sized from 100dvh: iOS
-        // home-screen apps report a short viewport at launch, which left an
-        // empty strip under the composer.
-        position: "fixed",
-        top: `calc(env(safe-area-inset-top) + ${TOP_TABS_HEIGHT}px)`,
-        bottom: keyboardInset,
-        insetInline: 0,
+        // Fills the app frame's content area (AppShell), which is already
+        // sized to the visible screen and lifted above the keyboard.
+        flex: 1,
+        minHeight: 0,
+        width: "100%",
         display: "flex",
         flexDirection: "column",
         maxWidth: 640,
@@ -355,8 +325,7 @@ export default function ChatClient({ myMemberId, adults, initialMessages }: Prop
           display: "flex",
           alignItems: "flex-end",
           gap: "var(--sp-2)",
-          // Bottom clears the home indicator, except when the keyboard covers it.
-          padding: `var(--sp-2) var(--sp-4) ${keyboardInset > 0 ? "var(--sp-2)" : "calc(var(--sp-3) + env(safe-area-inset-bottom))"}`,
+          padding: "var(--sp-2) var(--sp-4) var(--sp-3)",
         }}
       >
         <textarea
