@@ -233,7 +233,8 @@ export default function ChatClient({ myMemberId, adults, initialMessages }: Prop
       setDraft(text.slice(0, MAX_LEN));
       requestAnimationFrame(autoGrow);
     },
-    onError: (kind) => setToast(kind === "denied" ? MIC_DENIED : MIC_FAILED),
+    // The code (e.g. "network", "audio-capture") helps diagnose a phone's issue.
+    onError: (kind, code) => setToast(kind === "denied" ? MIC_DENIED : `${MIC_FAILED}${code ? ` (${code})` : ""}`),
   });
   const toggleDictation = () => {
     if (dictation.listening) dictation.stop();
