@@ -13,12 +13,15 @@ export default function ChatLoading() {
     <div
       dir="rtl"
       style={{
-        height: `calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - ${TOP_TABS_HEIGHT}px)`,
+        position: "fixed",
+        top: `calc(env(safe-area-inset-top) + ${TOP_TABS_HEIGHT}px)`,
+        bottom: 0,
+        insetInline: 0,
         display: "flex",
         flexDirection: "column",
         maxWidth: 640,
         margin: "0 auto",
-        padding: "var(--sp-3) var(--sp-4)",
+        padding: "var(--sp-3) var(--sp-4) calc(var(--sp-3) + env(safe-area-inset-bottom))",
       }}
     >
       <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "flex-end", gap: "var(--sp-3)" }}>
