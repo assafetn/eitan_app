@@ -18,8 +18,11 @@ const WINDOW_MINUTES = 5;
 // runs and never fire. Everything is deduped (notification_log for pushes,
 // meta.dedupe_key for chat), so looking back can't double-send.
 const LOOKBACK_MINUTES = 15;
-const DEFAULT_DIGEST_TIME = "07:00";
-const DIGEST_BODY_MAX_LINES = 5;
+const DEFAULT_DIGEST_TIME = "07:30";
+// Timed reminders arrive this long before their time (per-adult setting,
+// family_members.reminder_lead_minutes; migration 020 sets 30).
+const DEFAULT_LEAD_MINUTES = 30;
+const DIGEST_BODY_MAX_LINES = 8;
 const BOTH_LABEL = "שניכם";
 
 // family_members carries reminder settings that aren't on the shared
@@ -213,21 +216,23 @@ async function handle(request: Request): Promise<NextResponse> {
 
   // 6. OWNERS. Every task has an owner (migration 019): one adult, or both
   // (is_shared). Only the owner(s) get its push notifications.
-  const memberNameById = new Map(members.map((m) => [m.id, m.name]));
-
   function isOwner(task: Task, memberId: string): boolean {
     if (task.is_shared) return true;
     if (task.assignee_id) return task.assignee_id === memberId;
     return true; // no owner (shouldn't exist anymore): don't let it go silent
   }
 
-  function assigneeLabel(task: Task): string {
-    if (!task.is_shared && task.assignee_id) {
-      const name = memberNameById.get(task.assignee_id);
-      if (name) return name;
-    }
-    return BOTH_LABEL;
-  }
+
+  // A timed reminder goes out once, anywhere from its fire time (due - lead)
+  // until shortly after it is due. So a task created less than `lead` minutes
+  // ahead ("remind me in 5 minutes") still fires on the next run instead of
+  // having already missed its early slot. Dedupe keys make it once only.
+  const timedDue = (dueMinutes: number, lead: number) =>
+    dueMinutes - lead < windowEnd && dueMinutes >= nowMinutes - LOOKBACK_MINUTES;
+
+  /** "08:00 להוריד את הזבל" / "• לקנות חלב", plus "(שניכם)" when shared. */
+  const digestLine = (t: Task, time: string | null) =>
+    `${time ? formatHHMM(time) : "•"} ${t.title}${t.is_shared ? ` (${BOTH_LABEL})` : ""}`;
 
   const planned: PlannedNotification[] = [];
 
@@ -243,19 +248,18 @@ async function handle(request: Request): Promise<NextResponse> {
     const overdueCount = mineOverdue.length;
     if (todayCount === 0 && overdueCount === 0) continue;
 
-    const todayLabel = todayCount === 1 ? "משימה אחת להיום" : `${todayCount} משימות להיום`;
     const digestTitle =
-      todayCount > 0 && overdueCount > 0
-        ? `${todayLabel}, ${overdueCount} באיחור`
-        : todayCount > 0
-        ? todayLabel
-        : overdueCount === 1
-        ? "משימה אחת באיחור"
-        : `${overdueCount} משימות באיחור`;
+      todayCount === 0
+        ? "בוקר טוב ☀️ אין משימות להיום"
+        : `בוקר טוב ☀️ ${todayCount === 1 ? "משימה אחת להיום" : `${todayCount} משימות להיום`}`;
 
+    // Timed tasks first, by time; then those without a time; overdue last.
+    const sorted = mine
+      .slice()
+      .sort((a, b) => (a.task.due_time ?? "99:99").localeCompare(b.task.due_time ?? "99:99"));
     const allLines = [
-      ...mine.map((occ) => `${occ.task.title} — ${assigneeLabel(occ.task)}`),
-      ...mineOverdue.map((t) => `באיחור: ${t.title} — ${assigneeLabel(t)}`),
+      ...sorted.map((occ) => digestLine(occ.task, occ.task.due_time)),
+      ...mineOverdue.map((t) => `באיחור: ${t.title}`),
     ];
     const shown = allLines.slice(0, DIGEST_BODY_MAX_LINES);
     if (allLines.length > DIGEST_BODY_MAX_LINES) {
@@ -273,26 +277,25 @@ async function handle(request: Request): Promise<NextResponse> {
     });
   }
 
-  // 8. PER-TASK PATH — only to the task's owner(s). Lead time is per
-  // recipient, so a shared task can fire in different windows for the two.
+  // 8. PER-TASK PATH — only to the task's owner(s), `lead` minutes early
+  // (30 by default): "להוריד את הזבל ב-08:00" arrives at 07:30.
   for (const occ of occurrences) {
     const dueTime = occ.task.due_time;
     if (!dueTime || !occ.date) continue;
     const dueMinutes = timeToMinutes(dueTime);
     if (dueMinutes === null) continue;
 
-    const body = `${formatHHMM(dueTime)} · ${assigneeLabel(occ.task)}`;
+    const body = `${occ.task.title} ב-${formatHHMM(dueTime)}${occ.task.is_shared ? ` (${BOTH_LABEL})` : ""}`;
 
     for (const member of recipients) {
       if (!isOwner(occ.task, member.id)) continue;
-      const fireAt = dueMinutes - (member.reminder_lead_minutes ?? 0);
-      if (!inWindow(fireAt)) continue;
+      if (!timedDue(dueMinutes, member.reminder_lead_minutes ?? DEFAULT_LEAD_MINUTES)) continue;
       planned.push({
         kind: "task",
         dedupeKey: `task:${occ.task.id}:${occ.date}:${member.id}`,
         memberId: member.id,
         memberName: member.name,
-        title: occ.task.title,
+        title: "⏰ תזכורת",
         body,
         url: "/chat",
       });
@@ -300,15 +303,19 @@ async function handle(request: Request): Promise<NextResponse> {
   }
 
   // 8b. CHAT PATH — independent of push opt-in. Eitan posts into the shared
-  // chat once per household: each timed task at its due time, and the morning
-  // summary at the earliest adult digest_time (default 07:00).
+  // chat once per household: each timed task at the same early time as its
+  // push, and the morning summary at the earliest adult digest_time (07:30).
   const adults = members.filter((m) => m.type === "adult");
   const chatPlanned: ChatPost[] = [];
+  const chatLead = Math.min(
+    ...adults.map((a) => a.reminder_lead_minutes ?? DEFAULT_LEAD_MINUTES),
+    DEFAULT_LEAD_MINUTES
+  );
 
   for (const occ of occurrences) {
     if (!occ.task.due_time || !occ.date) continue;
     const dueMinutes = timeToMinutes(occ.task.due_time);
-    if (dueMinutes === null || !inWindow(dueMinutes)) continue;
+    if (dueMinutes === null || !timedDue(dueMinutes, chatLead)) continue;
     chatPlanned.push(buildChatReminder(occ, adults, todayISO));
   }
 
