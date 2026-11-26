@@ -6,6 +6,7 @@
 import type { FamilyMember, Task } from "@/lib/types";
 import type { ResolvedOccurrence } from "@/lib/recurrence";
 import { formatWhen } from "./time";
+import { effectiveLead, leadLabel } from "@/lib/pushChoice";
 
 export interface ChatPost {
   dedupeKey: string;
@@ -74,4 +75,34 @@ export function buildChatDigest(
       task_ids: [...sorted.map((o) => o.task.id), ...overdue.map((t) => t.id)],
     },
   };
+}
+
+/**
+ * Summary Eitan posts once the adults have answered his question buttons
+ * (whose / when) and the task is complete. One per task (dedupe key).
+ */
+export function buildTaskSavedPost(task: Task, adults: Named[], today: string): ChatPost {
+  const who = task.is_shared ? "שניכם" : adults.find((a) => a.id === task.assignee_id)?.name ?? "—";
+  const lines = [`✅ שמרתי: ${task.title}`, `למי: ${who}`];
+  if (task.due_time) {
+    lines.push(`מתי: ${formatWhen(task.due_date, task.due_time, today)}`);
+    lines.push(task.push_enabled ? `פוש: ${pushWhen(task)}` : "פוש: בלי");
+  } else {
+    lines.push(`מתי: ${task.due_date ? `${formatWhen(task.due_date, null, today)} · ` : ""}בלי תזכורת`);
+  }
+  return {
+    dedupeKey: `chat:saved:${task.id}`,
+    body: lines.join("\n"),
+    meta: { kind: "task_saved", task_ids: [task.id] },
+  };
+}
+
+/** "חצי שעה לפני (07:30)" — the lead and the clock time the push goes out. */
+function pushWhen(task: Task): string {
+  const lead = effectiveLead(task);
+  const [h, m] = (task.due_time as string).split(":").map(Number);
+  const at = (((h * 60 + m - lead) % 1440) + 1440) % 1440;
+  const hhmm = `${String(Math.floor(at / 60)).padStart(2, "0")}:${String(at % 60).padStart(2, "0")}`;
+  const label = lead === 30 ? "חצי שעה לפני" : leadLabel(lead);
+  return lead === 0 ? label : `${label} (${hhmm})`;
 }

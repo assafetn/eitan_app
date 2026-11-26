@@ -5,12 +5,11 @@
 //   "למי התזכורת?"  → אסף / נטלי / שניכם            (owner_pending, migration 022)
 //   "מתי להזכיר?"   → reminder options / בלי תזכורת  (time_pending, migration 023)
 // A tap saves the answer on the task (adults may update tasks under RLS) and
-// that question disappears. With nothing left to ask, the card shows a short
-// "saved" line for a moment and then renders nothing.
+// that question disappears. With nothing left to ask the card renders
+// nothing, and ChatClient asks Eitan to post a summary of what was saved.
 
-import { useEffect, useRef, useState } from "react";
 import type { FamilyMember, Task } from "@/lib/types";
-import { formatWhen, jerusalemNow, addDays } from "@/lib/eitan/time";
+import { jerusalemNow, addDays } from "@/lib/eitan/time";
 
 export type CardTask = Pick<
   Task,
@@ -28,8 +27,6 @@ interface Props {
 }
 
 type ReminderOption = { label: string; date: string; time: string };
-
-const SAVED_VISIBLE_MS = 2500;
 
 const toMinutes = (hhmm: string) => Number(hhmm.slice(0, 2)) * 60 + Number(hhmm.slice(3, 5));
 const toHHMM = (min: number) => `${String(Math.floor(min / 60)).padStart(2, "0")}:${String(min % 60).padStart(2, "0")}`;
@@ -61,39 +58,7 @@ function reminderOptions(task: CardTask): ReminderOption[] {
 export default function TaskControls({ task, adults, onPatch }: Props) {
   const needsOwner = task.owner_pending;
   const needsTime = task.time_pending && !task.due_time;
-  const asking = needsOwner || needsTime;
-
-  // After the last answer on this device, show "נשמר" briefly, then nothing.
-  const [saved, setSaved] = useState<string | null>(null);
-  const wasAsking = useRef(asking);
-  useEffect(() => {
-    if (wasAsking.current && !asking) {
-      const owner = task.is_shared ? "לשניכם" : `ל${adults.find((a) => a.id === task.assignee_id)?.name ?? ""}`;
-      const when = task.due_time ? formatWhen(task.due_date, task.due_time, jerusalemNow().date) : "בלי תזכורת";
-      setSaved(`✓ נשמר: ${owner} · ${when}`);
-      const t = setTimeout(() => setSaved(null), SAVED_VISIBLE_MS);
-      wasAsking.current = asking;
-      return () => clearTimeout(t);
-    }
-    wasAsking.current = asking;
-  }, [asking, task, adults]);
-
-  if (!asking) {
-    if (!saved) return null;
-    return (
-      <div
-        role="status"
-        style={{
-          marginTop: 4,
-          fontFamily: "var(--font)",
-          fontSize: "var(--text-xs)",
-          color: "var(--jmh-sage)",
-        }}
-      >
-        {saved}
-      </div>
-    );
-  }
+  if (!needsOwner && !needsTime) return null;
 
   const setOwner = (who: string | "both") =>
     onPatch(
@@ -122,17 +87,16 @@ export default function TaskControls({ task, adults, onPatch }: Props) {
         marginTop: 4,
         display: "flex",
         flexDirection: "column",
-        gap: 10,
+        gap: 8,
         background: "var(--surface)",
-        border: "1px solid var(--jmh-blue-60)",
-        borderRadius: "var(--r-lg)",
-        padding: "10px 12px",
-        boxShadow: "var(--shadow-sm)",
+        border: "1px solid var(--border)",
+        borderRadius: "var(--r-md)",
+        padding: "8px 10px",
         fontFamily: "var(--font)",
         color: "var(--text-primary)",
       }}
     >
-      <span style={{ fontSize: "var(--text-sm)", fontWeight: 600 }}>{task.title}</span>
+      <span style={{ fontSize: "var(--text-xs)", color: "var(--text-secondary)" }}>{task.title}</span>
 
       {needsOwner && (
         <Question title="למי התזכורת?">
@@ -164,9 +128,9 @@ export default function TaskControls({ task, adults, onPatch }: Props) {
 
 function Question({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-      <span style={{ fontSize: "var(--text-sm)", fontWeight: 600, color: "var(--jmh-blue)" }}>{title}</span>
-      <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>{children}</div>
+    <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+      <span style={{ fontSize: "var(--text-xs)", fontWeight: 500, color: "var(--jmh-blue)" }}>{title}</span>
+      <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>{children}</div>
     </div>
   );
 }
@@ -178,15 +142,15 @@ function Chip({ quiet, onClick, children }: { quiet?: boolean; onClick: () => vo
       onClick={onClick}
       style={{
         fontFamily: "var(--font)",
-        fontSize: "var(--text-base)",
-        fontWeight: 500,
+        fontSize: "var(--text-sm)",
+        fontWeight: 400,
         lineHeight: 1,
-        minHeight: 40,
-        padding: "0 16px",
+        minHeight: 28,
+        padding: "0 10px",
         borderRadius: "var(--r-full)",
-        border: `1px solid ${quiet ? "var(--border-strong)" : "var(--jmh-blue-60)"}`,
-        background: quiet ? "transparent" : "var(--jmh-blue-05)",
-        color: quiet ? "var(--text-secondary)" : "var(--text-primary)",
+        border: `1px solid ${quiet ? "var(--border)" : "var(--jmh-blue-30)"}`,
+        background: "transparent",
+        color: quiet ? "var(--text-muted)" : "var(--jmh-blue)",
         cursor: "pointer",
         transition: "background var(--dur-fast) var(--ease-out)",
       }}
@@ -205,13 +169,12 @@ function TimePicker({ onPick }: { onPick: (hhmm: string) => void }) {
         display: "inline-flex",
         alignItems: "center",
         fontFamily: "var(--font)",
-        fontSize: "var(--text-base)",
-        fontWeight: 500,
-        minHeight: 40,
-        padding: "0 16px",
+        fontSize: "var(--text-sm)",
+        minHeight: 28,
+        padding: "0 10px",
         borderRadius: "var(--r-full)",
-        border: "1px dashed var(--jmh-blue-60)",
-        color: "var(--text-primary)",
+        border: "1px dashed var(--jmh-blue-30)",
+        color: "var(--jmh-blue)",
         cursor: "pointer",
       }}
     >

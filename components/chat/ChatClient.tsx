@@ -5,7 +5,7 @@ import { SendHorizontal } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import type { ChatMessage, FamilyMember } from "@/lib/types";
 import Toast from "@/components/ui/Toast";
-import TaskControls, { type CardTask, type TaskPatch } from "./TaskControls";
+import TaskControls, { hasQuestion, type CardTask, type TaskPatch } from "./TaskControls";
 
 const SEND_FAILED = "השליחה נכשלה, הקישו על ההודעה כדי לנסות שוב";
 const EITAN_FAILED = "איתן לא הצליח לענות כרגע";
@@ -151,6 +151,17 @@ export default function ChatClient({ myMemberId, adults, initialMessages }: Prop
       if (error) {
         setCardTasks((prev) => new Map(prev).set(id, before));
         setToast(SAVE_FAILED);
+        return;
+      }
+      // That was the last open question: Eitan posts a summary of what was
+      // saved (it arrives through realtime like any message).
+      if (hasQuestion(before) && !hasQuestion({ ...before, ...patch })) {
+        stickToBottomRef.current = true;
+        void fetch("/api/chat/task-saved", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ task_id: id }),
+        }).catch(() => undefined);
       }
     },
     [supabase, cardTasks]
