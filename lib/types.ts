@@ -79,6 +79,8 @@ export interface Task {
   push_lead_minutes: number | null;
   // Eitan couldn't tell whose it is and asked in the chat (migration 022).
   owner_pending: boolean;
+  // Eitan saved it without a time and asked "מתי להזכיר?" (migration 023).
+  time_pending: boolean;
   created_by: string;
   completed_at: string | null;
   created_at: string;

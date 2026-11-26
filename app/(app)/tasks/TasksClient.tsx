@@ -379,6 +379,8 @@ export default function TasksClient({
         is_shared: data.is_shared,
         // Picking an owner here answers Eitan's "למי התזכורת?" (migration 022).
         owner_pending: !data.is_shared && !data.assignee_id,
+        // A time set here answers Eitan's "מתי להזכיר?" (migration 023).
+        ...(data.due_time ? { time_pending: false } : {}),
         updated_at: new Date().toISOString(),
       })
       .eq("id", id);

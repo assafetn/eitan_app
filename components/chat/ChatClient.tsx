@@ -17,7 +17,7 @@ const STICK_TO_BOTTOM_PX = 120;
 const MAX_LEN = 4000; // mirrors the DB check constraint
 const SAVE_FAILED = "השינוי לא נשמר, נסו שוב";
 const CARD_TASK_SELECT =
-  "id, title, due_date, due_time, assignee_id, is_shared, owner_pending, push_enabled, push_lead_minutes, status, recurrence_rule";
+  "id, title, due_date, due_time, assignee_id, is_shared, owner_pending, time_pending, status";
 // Cards are only loaded for the tasks of the most recent replies.
 const MAX_CARD_TASKS = 60;
 
@@ -103,8 +103,9 @@ export default function ChatClient({ myMemberId, adults, initialMessages }: Prop
 
   const nameById = useMemo(() => new Map(adults.map((a) => [a.id, a.name])), [adults]);
 
-  // ── task buttons under Eitan's replies ──
-  // Each task gets one card, under the latest reply that created/changed it.
+  // ── one-time question buttons under Eitan's replies ──
+  // A task Eitan couldn't complete (whose? when?) gets its questions under
+  // the latest reply that created/changed it, until they're answered.
   const cardHome = useMemo(() => {
     const home = new Map<string, string>(); // task id → message id
     for (const m of messages) {
@@ -154,15 +155,6 @@ export default function ChatClient({ myMemberId, adults, initialMessages }: Prop
     },
     [supabase, cardTasks]
   );
-
-  // The newest reply's cards open with their buttons showing; older ones are
-  // one tappable summary line.
-  const newestCardMessage = useMemo(() => {
-    let newest: string | null = null;
-    for (const [taskId, msgId] of cardHome) if (cardTasks.get(taskId)?.status === "open") newest = msgId;
-    // cardHome is ordered by message, so the last open one is the newest.
-    return newest;
-  }, [cardHome, cardTasks]);
 
   const upsert = useCallback((rows: ChatMessage[]) => {
     setMessages((prev) => mergeMessages(prev, rows));
@@ -381,15 +373,8 @@ export default function ChatClient({ myMemberId, adults, initialMessages }: Prop
                   (m.meta.task_ids as string[]).map((id) => {
                     const t = cardTasks.get(id);
                     if (!t || t.status !== "open" || cardHome.get(id) !== m.id) return null;
-                    return (
-                      <TaskControls
-                        key={id}
-                        task={t}
-                        adults={adults}
-                        defaultExpanded={m.id === newestCardMessage}
-                        onPatch={patchTask}
-                      />
-                    );
+                    // Renders nothing once its questions are answered.
+                    return <TaskControls key={id} task={t} adults={adults} onPatch={patchTask} />;
                   })}
               </div>
             );

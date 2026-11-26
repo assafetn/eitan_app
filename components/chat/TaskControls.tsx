@@ -1,52 +1,43 @@
 "use client";
 
-// Buttons under Eitan's reply about a task.
-//
-// When Eitan couldn't tell, the card asks first, open and on top:
-//   "למי התזכורת?"  → אסף / נטלי / שניכם           (owner_pending, migration 022)
-//   "מתי להזכיר?"   → reminder options / בלי תזכורת  (no due_time, push still on)
-// After that (or when nothing is missing) it shows who it's for and when the
-// push goes out (migration 021), collapsed to one line on older replies.
-// Each tap saves the task directly (adults may update tasks under RLS).
+// One-time question buttons under Eitan's reply, only when he couldn't fill
+// something in:
+//   "למי התזכורת?"  → אסף / נטלי / שניכם            (owner_pending, migration 022)
+//   "מתי להזכיר?"   → reminder options / בלי תזכורת  (time_pending, migration 023)
+// A tap saves the answer on the task (adults may update tasks under RLS) and
+// that question disappears. With nothing left to ask, the card shows a short
+// "saved" line for a moment and then renders nothing.
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { FamilyMember, Task } from "@/lib/types";
 import { formatWhen, jerusalemNow, addDays } from "@/lib/eitan/time";
-import { effectiveLead, leadLabel, pushLabel, PUSH_LEAD_CHOICES } from "@/lib/pushChoice";
 
 export type CardTask = Pick<
   Task,
-  | "id"
-  | "title"
-  | "due_date"
-  | "due_time"
-  | "assignee_id"
-  | "is_shared"
-  | "owner_pending"
-  | "push_enabled"
-  | "push_lead_minutes"
-  | "status"
-  | "recurrence_rule"
+  "id" | "title" | "due_date" | "due_time" | "assignee_id" | "is_shared" | "owner_pending" | "time_pending" | "status"
 >;
 
 export type TaskPatch = Partial<
-  Pick<
-    Task,
-    "assignee_id" | "is_shared" | "owner_pending" | "push_enabled" | "push_lead_minutes" | "due_date" | "due_time"
-  >
+  Pick<Task, "assignee_id" | "is_shared" | "owner_pending" | "time_pending" | "due_date" | "due_time">
 >;
 
 interface Props {
   task: CardTask;
   adults: FamilyMember[];
-  defaultExpanded: boolean;
   onPatch: (id: string, patch: TaskPatch) => void;
 }
 
 type ReminderOption = { label: string; date: string; time: string };
 
+const SAVED_VISIBLE_MS = 2500;
+
 const toMinutes = (hhmm: string) => Number(hhmm.slice(0, 2)) * 60 + Number(hhmm.slice(3, 5));
 const toHHMM = (min: number) => `${String(Math.floor(min / 60)).padStart(2, "0")}:${String(min % 60).padStart(2, "0")}`;
+
+/** Does this task still have a question for the adults? */
+export function hasQuestion(task: CardTask): boolean {
+  return task.status === "open" && (task.owner_pending || (task.time_pending && !task.due_time));
+}
 
 /**
  * Reminder choices for a task without a time. A task dated in the future gets
@@ -67,20 +58,42 @@ function reminderOptions(task: CardTask): ReminderOption[] {
   return out;
 }
 
-export default function TaskControls({ task, adults, defaultExpanded, onPatch }: Props) {
-  const [expanded, setExpanded] = useState(defaultExpanded);
-  const today = jerusalemNow().date;
-
+export default function TaskControls({ task, adults, onPatch }: Props) {
   const needsOwner = task.owner_pending;
-  const needsTime = !task.due_time && task.push_enabled;
+  const needsTime = task.time_pending && !task.due_time;
   const asking = needsOwner || needsTime;
-  const open = expanded || asking;
 
-  const owner = needsOwner
-    ? "עוד לא נקבע"
-    : task.is_shared
-      ? "שניכם"
-      : adults.find((a) => a.id === task.assignee_id)?.name ?? "—";
+  // After the last answer on this device, show "נשמר" briefly, then nothing.
+  const [saved, setSaved] = useState<string | null>(null);
+  const wasAsking = useRef(asking);
+  useEffect(() => {
+    if (wasAsking.current && !asking) {
+      const owner = task.is_shared ? "לשניכם" : `ל${adults.find((a) => a.id === task.assignee_id)?.name ?? ""}`;
+      const when = task.due_time ? formatWhen(task.due_date, task.due_time, jerusalemNow().date) : "בלי תזכורת";
+      setSaved(`✓ נשמר: ${owner} · ${when}`);
+      const t = setTimeout(() => setSaved(null), SAVED_VISIBLE_MS);
+      wasAsking.current = asking;
+      return () => clearTimeout(t);
+    }
+    wasAsking.current = asking;
+  }, [asking, task, adults]);
+
+  if (!asking) {
+    if (!saved) return null;
+    return (
+      <div
+        role="status"
+        style={{
+          marginTop: 4,
+          fontFamily: "var(--font)",
+          fontSize: "var(--text-xs)",
+          color: "var(--jmh-sage)",
+        }}
+      >
+        {saved}
+      </div>
+    );
+  }
 
   const setOwner = (who: string | "both") =>
     onPatch(
@@ -90,11 +103,8 @@ export default function TaskControls({ task, adults, defaultExpanded, onPatch }:
         : { is_shared: false, assignee_id: who, owner_pending: false }
     );
 
-  const setPush = (lead: number | "off") =>
-    onPatch(task.id, lead === "off" ? { push_enabled: false } : { push_enabled: true, push_lead_minutes: lead });
-
   const setReminder = (date: string, time: string) =>
-    onPatch(task.id, { due_date: date, due_time: time, push_enabled: true });
+    onPatch(task.id, { due_date: date, due_time: time, time_pending: false });
 
   // "שעה אחרת": on the task's own future date, else today if still ahead, else tomorrow.
   const setOtherTime = (hhmm: string) => {
@@ -110,114 +120,43 @@ export default function TaskControls({ task, adults, defaultExpanded, onPatch }:
       style={{
         maxWidth: "82%",
         marginTop: 4,
+        display: "flex",
+        flexDirection: "column",
+        gap: 10,
         background: "var(--surface)",
-        border: `1px solid ${asking ? "var(--jmh-blue-60)" : "var(--border)"}`,
+        border: "1px solid var(--jmh-blue-60)",
         borderRadius: "var(--r-lg)",
-        padding: "8px 10px",
+        padding: "10px 12px",
         boxShadow: "var(--shadow-sm)",
         fontFamily: "var(--font)",
         color: "var(--text-primary)",
       }}
     >
-      <button
-        type="button"
-        onClick={() => !asking && setExpanded((v) => !v)}
-        aria-expanded={open}
-        style={{
-          all: "unset",
-          display: "block",
-          width: "100%",
-          cursor: asking ? "default" : "pointer",
-          fontSize: "var(--text-sm)",
-          lineHeight: 1.4,
-        }}
-      >
-        <span style={{ fontWeight: 600 }}>{task.title}</span>
-        {(task.due_date || task.due_time) && (
-          <span style={{ color: "var(--text-secondary)" }}> · {formatWhen(task.due_date, task.due_time, today)}</span>
-        )}
-        {!open && (
-          <span style={{ display: "block", color: "var(--text-secondary)", fontSize: "var(--text-xs)", marginTop: 2 }}>
-            🔔 {owner} · {pushLabel(task)} · <span style={{ color: "var(--jmh-blue)" }}>שינוי</span>
-          </span>
-        )}
-      </button>
+      <span style={{ fontSize: "var(--text-sm)", fontWeight: 600 }}>{task.title}</span>
 
-      {open && (
-        <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 8 }}>
-          {needsOwner && (
-            <Question title="למי התזכורת?">
-              {adults.map((a) => (
-                <Chip key={a.id} big active={false} onClick={() => setOwner(a.id)}>
-                  {a.name}
-                </Chip>
-              ))}
-              <Chip big active={false} onClick={() => setOwner("both")}>
-                שניכם
-              </Chip>
-            </Question>
-          )}
+      {needsOwner && (
+        <Question title="למי התזכורת?">
+          {adults.map((a) => (
+            <Chip key={a.id} onClick={() => setOwner(a.id)}>
+              {a.name}
+            </Chip>
+          ))}
+          <Chip onClick={() => setOwner("both")}>שניכם</Chip>
+        </Question>
+      )}
 
-          {needsTime && (
-            <Question title="מתי להזכיר?">
-              {reminderOptions(task).map((o) => (
-                <Chip key={o.label} big active={false} onClick={() => setReminder(o.date, o.time)}>
-                  {o.label}
-                </Chip>
-              ))}
-              <TimePicker onPick={setOtherTime} />
-              <Chip big active={false} onClick={() => setPush("off")}>
-                בלי תזכורת
-              </Chip>
-            </Question>
-          )}
-
-          {!needsOwner && (
-            <Row label="למי">
-              {adults.map((a) => (
-                <Chip key={a.id} active={!task.is_shared && task.assignee_id === a.id} onClick={() => setOwner(a.id)}>
-                  {a.name}
-                </Chip>
-              ))}
-              <Chip active={task.is_shared} onClick={() => setOwner("both")}>
-                שניכם
-              </Chip>
-            </Row>
-          )}
-
-          {!needsTime && (
-            <Row label="פוש">
-              {PUSH_LEAD_CHOICES.map((lead) => (
-                <Chip
-                  key={lead}
-                  disabled={!task.due_time}
-                  active={!!task.due_time && task.push_enabled && effectiveLead(task) === lead}
-                  onClick={() => setPush(lead)}
-                >
-                  {lead === 30 ? "חצי שעה לפני" : leadLabel(lead)}
-                </Chip>
-              ))}
-              <Chip active={!task.push_enabled} onClick={() => setPush("off")}>
-                בלי פוש
-              </Chip>
-            </Row>
-          )}
-
-          {!task.due_time && !task.push_enabled && (
-            <button
-              type="button"
-              onClick={() => onPatch(task.id, { push_enabled: true })}
-              style={{
-                all: "unset",
-                cursor: "pointer",
-                fontSize: "var(--text-xs)",
-                color: "var(--jmh-blue)",
-              }}
-            >
-              בכל זאת להוסיף תזכורת
-            </button>
-          )}
-        </div>
+      {needsTime && (
+        <Question title="מתי להזכיר?">
+          {reminderOptions(task).map((o) => (
+            <Chip key={o.label} onClick={() => setReminder(o.date, o.time)}>
+              {o.label}
+            </Chip>
+          ))}
+          <TimePicker onPick={setOtherTime} />
+          <Chip quiet onClick={() => onPatch(task.id, { time_pending: false })}>
+            בלי תזכורת
+          </Chip>
+        </Question>
       )}
     </div>
   );
@@ -232,48 +171,24 @@ function Question({ title, children }: { title: string; children: React.ReactNod
   );
 }
 
-function Row({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-      <span style={{ fontSize: "var(--text-xs)", color: "var(--text-secondary)", minWidth: 28 }}>{label}</span>
-      {children}
-    </div>
-  );
-}
-
-function Chip({
-  active,
-  big,
-  disabled,
-  onClick,
-  children,
-}: {
-  active: boolean;
-  big?: boolean;
-  disabled?: boolean;
-  onClick: () => void;
-  children: React.ReactNode;
-}) {
+function Chip({ quiet, onClick, children }: { quiet?: boolean; onClick: () => void; children: React.ReactNode }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      disabled={disabled}
-      aria-pressed={active}
       style={{
         fontFamily: "var(--font)",
-        fontSize: big ? "var(--text-base)" : "var(--text-sm)",
-        fontWeight: big ? 500 : 400,
+        fontSize: "var(--text-base)",
+        fontWeight: 500,
         lineHeight: 1,
-        minHeight: big ? 40 : 32,
-        padding: big ? "0 16px" : "0 12px",
+        minHeight: 40,
+        padding: "0 16px",
         borderRadius: "var(--r-full)",
-        border: `1px solid ${active ? "var(--jmh-blue)" : big ? "var(--jmh-blue-60)" : "var(--border-strong)"}`,
-        background: active ? "var(--jmh-blue)" : big ? "var(--jmh-blue-05)" : "transparent",
-        color: active ? "var(--text-on-blue)" : "var(--text-primary)",
-        opacity: disabled ? 0.4 : 1,
-        cursor: disabled ? "default" : "pointer",
-        transition: "background var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out)",
+        border: `1px solid ${quiet ? "var(--border-strong)" : "var(--jmh-blue-60)"}`,
+        background: quiet ? "transparent" : "var(--jmh-blue-05)",
+        color: quiet ? "var(--text-secondary)" : "var(--text-primary)",
+        cursor: "pointer",
+        transition: "background var(--dur-fast) var(--ease-out)",
       }}
     >
       {children}
@@ -291,11 +206,12 @@ function TimePicker({ onPick }: { onPick: (hhmm: string) => void }) {
         alignItems: "center",
         fontFamily: "var(--font)",
         fontSize: "var(--text-base)",
+        fontWeight: 500,
         minHeight: 40,
         padding: "0 16px",
         borderRadius: "var(--r-full)",
         border: "1px dashed var(--jmh-blue-60)",
-        color: "var(--text-secondary)",
+        color: "var(--text-primary)",
         cursor: "pointer",
       }}
     >

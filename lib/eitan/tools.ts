@@ -162,18 +162,28 @@ const FOR_WHOM_NEW = {
     ' "ask" = the message does not say whose it is: never guess, save it with "ask" and ask "למי התזכורת?" (the app shows buttons for each adult and both).',
 } as const;
 
-const PUSH_BEFORE = {
-  type: ["integer", "null"],
+// Plain integers, not nullable: strict tool schemas allow at most 16
+// nullable/union parameters across all tools, and the API rejects the whole
+// request above that (it did, 2026-11-26).
+const PUSH_BEFORE_NEW = {
+  type: "integer",
   description:
-    "Phone push for a timed task: minutes before due_time (0 = at the time), -1 = no push at all. Null = the default (30 minutes before, or unchanged on update). Only set it when they said so (\"תזכיר לי רבע שעה לפני\" = 15, \"בלי התראה\" = -1).",
+    "Phone push for a timed task: minutes before due_time. 30 = the default; use it unless they said otherwise (\"רבע שעה לפני\" = 15, \"בזמן\" = 0, \"בלי התראה\" = -1 for no push).",
 } as const;
 
-/** -1 = off; 0..1440 = minutes before; null = default / unchanged. */
-function pushPatch(value: number | null): { push_enabled: boolean; push_lead_minutes: number | null } | null | "bad" {
-  if (value === null) return null;
+const PUSH_BEFORE_UPDATE = {
+  type: "integer",
+  description:
+    "-2 = leave unchanged (the usual value). Otherwise minutes before due_time (30 = default, 15, 0 = at the time) or -1 = no push. Only change it when they asked.",
+} as const;
+
+/** -2 = unchanged; -1 = off; 0..1440 = minutes before (30 = the default). */
+function pushPatch(value: number): { push_enabled: boolean; push_lead_minutes: number | null } | null | "bad" {
+  if (value === -2) return null;
   if (value === -1) return { push_enabled: false, push_lead_minutes: null };
   if (!Number.isInteger(value) || value < 0 || value > 1440) return "bad";
-  return { push_enabled: true, push_lead_minutes: value };
+  // 30 is everyone's default: store null so it follows the adult's setting.
+  return { push_enabled: true, push_lead_minutes: value === 30 ? null : value };
 }
 
 const WEEKDAYS = {
@@ -228,7 +238,7 @@ export function makeTools(ctx: EitanContext) {
         due_time: { type: ["string", "null"], description: "HH:MM 24h, or null." },
         repeat: { type: "string", enum: ["none", "daily", "weekly"] },
         repeat_days: WEEKDAYS,
-        push_minutes_before: PUSH_BEFORE,
+        push_minutes_before: PUSH_BEFORE_NEW,
         notes: { type: ["string", "null"] },
       },
       required: ["title", "for_whom", "child_id", "due_date", "due_time", "repeat", "repeat_days", "push_minutes_before", "notes"],
@@ -242,7 +252,7 @@ export function makeTools(ctx: EitanContext) {
       if (input.due_time !== null && !dueTime) return fail("due_time must be HH:MM");
       if (input.child_id && !ctx.children.some((c) => c.id === input.child_id)) return fail("unknown child_id");
       const push = pushPatch(input.push_minutes_before);
-      if (push === "bad") return fail("push_minutes_before must be -1 or 0..1440");
+      if (push === "bad" || input.push_minutes_before === -2) return fail("push_minutes_before must be -1 or 0..1440");
 
       // A repeating task needs a start date; default to today.
       const dueDate = input.due_date ?? (input.repeat !== "none" ? ctx.today : null);
@@ -263,6 +273,8 @@ export function makeTools(ctx: EitanContext) {
           priority: "normal",
           recurrence_rule: rule,
           ...(push ?? {}),
+          // No time given: the chat asks "מתי להזכיר?" once (migration 023).
+          time_pending: dueTime === null,
           created_by: ctx.sender.id,
         })
         .select(TASK_SELECT)
@@ -295,7 +307,7 @@ export function makeTools(ctx: EitanContext) {
         remove_time: { type: "boolean", description: "true to clear the time (keeps the date)" },
         repeat: { anyOf: [{ type: "string", enum: ["none", "daily", "weekly"] }, { type: "null" }] },
         repeat_days: WEEKDAYS,
-        push_minutes_before: PUSH_BEFORE,
+        push_minutes_before: PUSH_BEFORE_UPDATE,
         notes: { type: ["string", "null"] },
       },
       required: ["task_id", "title", "for_whom", "due_date", "due_time", "remove_time", "repeat", "repeat_days", "push_minutes_before", "notes"],
@@ -321,11 +333,14 @@ export function makeTools(ctx: EitanContext) {
         if (!isISODate(input.due_date)) return fail("due_date must be YYYY-MM-DD");
         patch.due_date = input.due_date;
       }
-      if (input.remove_time) patch.due_time = null;
-      else if (input.due_time !== null) {
+      if (input.remove_time) {
+        patch.due_time = null;
+        patch.time_pending = false; // they said it has no time
+      } else if (input.due_time !== null) {
         const t = normalizeTime(input.due_time);
         if (!t) return fail("due_time must be HH:MM");
         patch.due_time = t;
+        patch.time_pending = false;
       }
       const rule = buildRule(
         input.repeat as "none" | "daily" | "weekly" | null,
@@ -338,7 +353,7 @@ export function makeTools(ctx: EitanContext) {
       }
       if (input.notes !== null) patch.notes = input.notes.trim() || null;
       const push = pushPatch(input.push_minutes_before);
-      if (push === "bad") return fail("push_minutes_before must be -1 or 0..1440");
+      if (push === "bad") return fail("push_minutes_before must be -2, -1 or 0..1440");
       if (push) Object.assign(patch, push);
 
       const { data, error } = await ctx.supabase.from("tasks").update(patch).eq("id", current.id).select(TASK_SELECT).single();
