@@ -15,6 +15,7 @@ import { useCoalescedRefresh } from "@/lib/useCoalescedRefresh";
 import TaskRow from "@/components/ui/TaskRow";
 import SwipeToDelete from "@/components/ui/SwipeToDelete";
 import AddTaskModal from "@/components/ui/AddTaskModal";
+import PullToRefresh from "@/components/ui/PullToRefresh";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import Toast from "@/components/ui/Toast";
 import { Check, Plus } from "lucide-react";
@@ -68,6 +69,15 @@ export default function TasksClient({
 }: Props) {
   const [tasks, setTasks] = useState<Task[]>(initialTasks);
   const [overrides, setOverrides] = useState<OccurrenceOverride[]>(initialOverrides);
+  // A server refresh (pull-to-refresh, focus refetch, the post-mutation badge
+  // refresh) re-sends the props: take them as the new truth, so changes made
+  // on the other phone or by Eitan show up.
+  useEffect(() => {
+    setTasks(initialTasks);
+  }, [initialTasks]);
+  useEffect(() => {
+    setOverrides(initialOverrides);
+  }, [initialOverrides]);
   const [showAdd, setShowAdd] = useState(false);
   // When set, the add-task sheet opens in edit mode for this task (the series
   // parent, for a recurring occurrence).
@@ -438,84 +448,91 @@ export default function TasksClient({
   }
 
   return (
-    <div className="page">
-      {back}
-      {/* Header: a large title; "add" is a quiet tonal button — the chat is
-          the main way tasks come in. */}
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          gap: "var(--sp-3)",
-          minHeight: 44,
-          margin: back ? "var(--sp-1) 0 var(--sp-5)" : "var(--sp-2) 0 var(--sp-5)",
-        }}
-      >
-        <h1 className="page-title">{title}</h1>
-
-        {showAddButton && (
-          <button type="button" className="btn-tonal" onClick={() => setShowAdd(true)}>
-            <Plus size={16} strokeWidth={2.2} />
-            משימה חדשה
-          </button>
-        )}
-      </div>
-
-      {myMemberId && <OwnerViewToggle value={view} onChange={chooseView} />}
-
-      {/* Empty state — teaches where tasks come from. */}
-      {visible.length === 0 && (
-        <div
-          style={{
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            gap: "var(--sp-2)",
-            textAlign: "center",
-            padding: "var(--sp-12) var(--sp-6)",
-            fontFamily: "var(--font)",
-          }}
-        >
-          <span
-            aria-hidden="true"
+    <>
+      <PullToRefresh>
+        <div className="page">
+          {back}
+          {/* Header: a large title; "add" is a quiet tonal button — the chat is
+              the main way tasks come in. */}
+          <div
             style={{
-              width: 48,
-              height: 48,
-              borderRadius: "50%",
-              display: "grid",
-              placeItems: "center",
-              background: "var(--jmh-sage-bg)",
-              color: "var(--jmh-sage)",
-              marginBottom: "var(--sp-2)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: "var(--sp-3)",
+              minHeight: 44,
+              margin: back ? "var(--sp-1) 0 var(--sp-5)" : "var(--sp-2) 0 var(--sp-5)",
             }}
           >
-            <Check size={22} strokeWidth={2.2} />
-          </span>
-          <p style={{ fontSize: "var(--text-md)", fontWeight: 600, color: "var(--text-primary)", margin: 0 }}>
-            {filterMine ? "אין לך משימות פתוחות" : "אין משימות פתוחות"}
-          </p>
-          {showAddButton && (
-            <p style={{ fontSize: "var(--text-sm)", color: "var(--text-muted)", margin: 0, lineHeight: 1.5 }}>
-              כתבו לאיתן בצ׳אט, והמשימה תופיע כאן.
-            </p>
+            <h1 className="page-title">{title}</h1>
+
+            {showAddButton && (
+              <button type="button" className="btn-tonal" onClick={() => setShowAdd(true)}>
+                <Plus size={16} strokeWidth={2.2} />
+                משימה חדשה
+              </button>
+            )}
+          </div>
+
+          {myMemberId && <OwnerViewToggle value={view} onChange={chooseView} />}
+
+          {/* Empty state — teaches where tasks come from. */}
+          {visible.length === 0 && (
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                gap: "var(--sp-2)",
+                textAlign: "center",
+                padding: "var(--sp-12) var(--sp-6)",
+                fontFamily: "var(--font)",
+              }}
+            >
+              <span
+                aria-hidden="true"
+                style={{
+                  width: 48,
+                  height: 48,
+                  borderRadius: "50%",
+                  display: "grid",
+                  placeItems: "center",
+                  background: "var(--jmh-sage-bg)",
+                  color: "var(--jmh-sage)",
+                  marginBottom: "var(--sp-2)",
+                }}
+              >
+                <Check size={22} strokeWidth={2.2} />
+              </span>
+              <p style={{ fontSize: "var(--text-md)", fontWeight: 600, color: "var(--text-primary)", margin: 0 }}>
+                {filterMine ? "אין לך משימות פתוחות" : "אין משימות פתוחות"}
+              </p>
+              {showAddButton && (
+                <p style={{ fontSize: "var(--text-sm)", color: "var(--text-muted)", margin: 0, lineHeight: 1.5 }}>
+                  כתבו לאיתן בצ׳אט, והמשימה תופיע כאן.
+                </p>
+              )}
+            </div>
           )}
+
+          {overdue.length > 0 && (
+            <Section title="באיחור" count={overdue.length} accent>{overdue.map(renderRow)}</Section>
+          )}
+          {today.length > 0 && (
+            <Section title="היום" count={today.length}>{today.map(renderRow)}</Section>
+          )}
+          {upcoming.length > 0 && (
+            <Section title="קרוב" count={upcoming.length}>{upcoming.map(renderRow)}</Section>
+          )}
+          {noDate.length > 0 && (
+            <Section title="ללא תאריך" count={noDate.length}>{noDate.map(renderRow)}</Section>
+          )}
+
         </div>
-      )}
+      </PullToRefresh>
 
-      {overdue.length > 0 && (
-        <Section title="באיחור" count={overdue.length} accent>{overdue.map(renderRow)}</Section>
-      )}
-      {today.length > 0 && (
-        <Section title="היום" count={today.length}>{today.map(renderRow)}</Section>
-      )}
-      {upcoming.length > 0 && (
-        <Section title="קרוב" count={upcoming.length}>{upcoming.map(renderRow)}</Section>
-      )}
-      {noDate.length > 0 && (
-        <Section title="ללא תאריך" count={noDate.length}>{noDate.map(renderRow)}</Section>
-      )}
-
+      {/* Outside the pull wrapper: its transform must never become the
+          containing block of these fixed layers. */}
       {(showAdd || editingTask) && (
         <AddTaskModal
           key={editingTask?.id ?? "new"}
@@ -552,7 +569,7 @@ export default function TasksClient({
       )}
 
       <Toast message={toast} onDismiss={() => setToast(null)} />
-    </div>
+    </>
   );
 }
 

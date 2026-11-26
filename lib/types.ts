@@ -81,6 +81,9 @@ export interface Task {
   owner_pending: boolean;
   // Eitan saved it without a time and asked "מתי להזכיר?" (migration 023).
   time_pending: boolean;
+  // The kind of task, from the emoji catalog in lib/emoji.ts (migration 024).
+  // Null = not chosen; taskEmoji() then guesses from the title.
+  emoji_key?: string | null;
   created_by: string;
   completed_at: string | null;
   created_at: string;

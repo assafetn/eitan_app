@@ -4,6 +4,7 @@ import type { FamilyMember, Task, TaskStatus } from "@/lib/types";
 import { formatDueDate, recurrenceLabel, todayISO } from "@/lib/recurrence";
 import { getTaskPeople } from "@/lib/taskPeople";
 import { Calendar, Check, Repeat, User } from "lucide-react";
+import { taskEmoji } from "@/lib/emoji";
 
 interface Props {
   task: Task;
@@ -96,6 +97,11 @@ export default function TaskRow({ task, adults, date, status, isRecurring, onTog
           background stays opaque over the swipe action. */}
       <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 3, opacity: isDone ? 0.7 : 1 }}>
         <div style={{ display: "flex", alignItems: "center", gap: "var(--sp-1)", minWidth: 0 }}>
+          {/* What kind of task this is (lib/emoji.ts) — Eitan's pick, or a
+              guess from the title. Decorative: the title says it in words. */}
+          <span aria-hidden="true" style={{ fontSize: "var(--text-base)", lineHeight: 1, flexShrink: 0, marginInlineEnd: 2 }}>
+            {taskEmoji(task)}
+          </span>
           {isRecurring && (
             <Repeat
               size={12}

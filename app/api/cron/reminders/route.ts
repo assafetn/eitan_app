@@ -4,6 +4,7 @@ import { createServiceClient } from "@/lib/supabase/service";
 import { openOccurrencesForDay, overdueSingles } from "@/lib/stats";
 import { sendPushToMember, type PushPayload } from "@/lib/push";
 import type { OccurrenceOverride, Task } from "@/lib/types";
+import { taskEmoji } from "@/lib/emoji";
 import { buildChatDigest, buildChatReminder, type ChatPost } from "@/lib/eitan/chatPosts";
 
 // web-push signs with Node crypto — never Edge.
@@ -232,7 +233,7 @@ async function handle(request: Request): Promise<NextResponse> {
 
   /** "08:00 להוריד את הזבל" / "• לקנות חלב", plus "(שניכם)" when shared. */
   const digestLine = (t: Task, time: string | null) =>
-    `${time ? formatHHMM(time) : "•"} ${t.title}${t.is_shared ? ` (${BOTH_LABEL})` : ""}`;
+    `${time ? `${formatHHMM(time)} ` : ""}${taskEmoji(t)} ${t.title}${t.is_shared ? ` (${BOTH_LABEL})` : ""}`;
 
   const planned: PlannedNotification[] = [];
 
@@ -259,7 +260,7 @@ async function handle(request: Request): Promise<NextResponse> {
       .sort((a, b) => (a.task.due_time ?? "99:99").localeCompare(b.task.due_time ?? "99:99"));
     const allLines = [
       ...sorted.map((occ) => digestLine(occ.task, occ.task.due_time)),
-      ...mineOverdue.map((t) => `באיחור: ${t.title}`),
+      ...mineOverdue.map((t) => `באיחור: ${taskEmoji(t)} ${t.title}`),
     ];
     const shown = allLines.slice(0, DIGEST_BODY_MAX_LINES);
     if (allLines.length > DIGEST_BODY_MAX_LINES) {
@@ -301,7 +302,7 @@ async function handle(request: Request): Promise<NextResponse> {
         dedupeKey: `task:${occ.task.id}:${occ.date}:${member.id}`,
         memberId: member.id,
         memberName: member.name,
-        title: "⏰ תזכורת",
+        title: `${taskEmoji(occ.task)} תזכורת`,
         body,
         url: "/chat",
       });

@@ -17,7 +17,7 @@ const STICK_TO_BOTTOM_PX = 120;
 const MAX_LEN = 4000; // mirrors the DB check constraint
 const SAVE_FAILED = "השינוי לא נשמר, נסו שוב";
 const CARD_TASK_SELECT =
-  "id, title, due_date, due_time, assignee_id, is_shared, owner_pending, time_pending, status";
+  "id, title, emoji_key, due_date, due_time, assignee_id, is_shared, owner_pending, time_pending, status";
 // Cards are only loaded for the tasks of the most recent replies.
 const MAX_CARD_TASKS = 60;
 
@@ -422,7 +422,9 @@ export default function ChatClient({ myMemberId, adults, initialMessages }: Prop
           onKeyDown={onKeyDown}
           rows={1}
           maxLength={MAX_LEN}
-          dir="auto"
+          // Empty → RTL, so the Hebrew placeholder sits on the right (dir=auto
+          // reads an empty box as LTR). Once typing, follow the text itself.
+          dir={draft ? "auto" : "rtl"}
           placeholder="כתבו לאיתן…"
           aria-label="הודעה"
           style={{

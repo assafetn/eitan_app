@@ -10,10 +10,11 @@
 
 import type { FamilyMember, Task } from "@/lib/types";
 import { jerusalemNow, addDays } from "@/lib/eitan/time";
+import { taskEmoji } from "@/lib/emoji";
 
 export type CardTask = Pick<
   Task,
-  "id" | "title" | "due_date" | "due_time" | "assignee_id" | "is_shared" | "owner_pending" | "time_pending" | "status"
+  "id" | "title" | "emoji_key" | "due_date" | "due_time" | "assignee_id" | "is_shared" | "owner_pending" | "time_pending" | "status"
 >;
 
 export type TaskPatch = Partial<
@@ -96,7 +97,9 @@ export default function TaskControls({ task, adults, onPatch }: Props) {
         color: "var(--text-primary)",
       }}
     >
-      <span style={{ fontSize: "var(--text-xs)", color: "var(--text-muted)" }}>{task.title}</span>
+      <span style={{ fontSize: "var(--text-xs)", color: "var(--text-muted)" }}>
+        {taskEmoji(task)} {task.title}
+      </span>
 
       {needsOwner && (
         <Question title="למי התזכורת?">

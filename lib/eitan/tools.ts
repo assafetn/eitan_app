@@ -10,6 +10,7 @@ import type { FamilyMember, OccurrenceOverride, RecurrenceRule, Task, Weekday } 
 import { recurrenceLabel, resolveOccurrencesInRange, WEEKDAY_KEYS, type ResolvedOccurrence } from "@/lib/recurrence";
 import { addDays, formatWhen, isISODate, normalizeTime, weekdayIndex } from "./time";
 import { pushLabel } from "@/lib/pushChoice";
+import { EMOJI_KEYS, taskEmoji } from "@/lib/emoji";
 
 export interface EitanContext {
   /** The sender's session client — RLS applies. */
@@ -56,6 +57,7 @@ function describe(occ: ResolvedOccurrence, ctx: EitanContext) {
   const t = occ.task;
   return {
     task_id: t.id,
+    emoji: taskEmoji(t),
     title: t.title,
     when: formatWhen(occ.date, t.due_time, ctx.today),
     date: occ.date,
@@ -186,6 +188,20 @@ function pushPatch(value: number): { push_enabled: boolean; push_lead_minutes: n
   return { push_enabled: true, push_lead_minutes: value === 30 ? null : value };
 }
 
+// Not nullable (see the union limit above): update_task uses "unchanged".
+const EMOJI_NEW = {
+  type: "string",
+  enum: EMOJI_KEYS,
+  description:
+    "The kind of task, from the emoji catalog in your instructions (e.g. groceries for food shopping, dentist, bill). \"reminder\" only when nothing fits better.",
+} as const;
+
+const EMOJI_UPDATE = {
+  type: "string",
+  enum: ["unchanged", ...EMOJI_KEYS],
+  description: "\"unchanged\" (the usual value), or a new kind from the catalog when the task's subject changed.",
+} as const;
+
 const WEEKDAYS = {
   type: ["array", "null"],
   items: { type: "string", enum: ["sun", "mon", "tue", "wed", "thu", "fri", "sat"] },
@@ -232,6 +248,7 @@ export function makeTools(ctx: EitanContext) {
       type: "object",
       properties: {
         title: { type: "string", description: "Short Hebrew title, e.g. 'לקחת את איתן לרופא'" },
+        emoji: EMOJI_NEW,
         for_whom: FOR_WHOM_NEW,
         child_id: { type: ["string", "null"], description: "Id of the child this is about, from the family list, or null." },
         due_date: { type: ["string", "null"], description: "YYYY-MM-DD in Jerusalem, or null for an undated to-do." },
@@ -241,7 +258,7 @@ export function makeTools(ctx: EitanContext) {
         push_minutes_before: PUSH_BEFORE_NEW,
         notes: { type: ["string", "null"] },
       },
-      required: ["title", "for_whom", "child_id", "due_date", "due_time", "repeat", "repeat_days", "push_minutes_before", "notes"],
+      required: ["title", "emoji", "for_whom", "child_id", "due_date", "due_time", "repeat", "repeat_days", "push_minutes_before", "notes"],
       additionalProperties: false,
     },
     run: async (input) => {
@@ -263,6 +280,7 @@ export function makeTools(ctx: EitanContext) {
         .from("tasks")
         .insert({
           title,
+          emoji_key: (EMOJI_KEYS as string[]).includes(input.emoji) ? input.emoji : null,
           notes: input.notes?.trim() || null,
           due_date: dueDate,
           due_time: dueTime,
@@ -302,6 +320,7 @@ export function makeTools(ctx: EitanContext) {
       properties: {
         task_id: { type: "string" },
         title: { type: ["string", "null"] },
+        emoji: EMOJI_UPDATE,
         for_whom: { anyOf: [FOR_WHOM, { type: "null" }] },
         due_date: { type: ["string", "null"], description: "YYYY-MM-DD, or null = unchanged" },
         due_time: { type: ["string", "null"], description: "HH:MM, or null = unchanged" },
@@ -311,7 +330,7 @@ export function makeTools(ctx: EitanContext) {
         push_minutes_before: PUSH_BEFORE_UPDATE,
         notes: { type: ["string", "null"] },
       },
-      required: ["task_id", "title", "for_whom", "due_date", "due_time", "remove_time", "repeat", "repeat_days", "push_minutes_before", "notes"],
+      required: ["task_id", "title", "emoji", "for_whom", "due_date", "due_time", "remove_time", "repeat", "repeat_days", "push_minutes_before", "notes"],
       additionalProperties: false,
     },
     run: async (input) => {
@@ -329,6 +348,7 @@ export function makeTools(ctx: EitanContext) {
         if (!input.title.trim()) return fail("title is empty");
         patch.title = input.title.trim();
       }
+      if (input.emoji !== "unchanged" && (EMOJI_KEYS as string[]).includes(input.emoji)) patch.emoji_key = input.emoji;
       if (input.for_whom !== null) Object.assign(patch, resolvePeople(input.for_whom as ForWhom, ctx));
       if (input.due_date !== null) {
         if (!isISODate(input.due_date)) return fail("due_date must be YYYY-MM-DD");
@@ -403,7 +423,7 @@ export function makeTools(ctx: EitanContext) {
           .eq("id", task.id);
         if (error) return fail(`save failed: ${error.message}`);
         ctx.touchedTaskIds.add(task.id);
-        return ok({ title: task.title, status: input.done ? "done" : "open" });
+        return ok({ emoji: taskEmoji(task), title: task.title, status: input.done ? "done" : "open" });
       }
 
       // Repeating: one override row per completed date (same shape the app writes).
@@ -431,7 +451,7 @@ export function makeTools(ctx: EitanContext) {
         if (error) return fail(`save failed: ${error.message}`);
       }
       ctx.touchedTaskIds.add(task.id);
-      return ok({ title: task.title, date: formatWhen(date, null, ctx.today), status: input.done ? "done" : "open" });
+      return ok({ emoji: taskEmoji(task), title: task.title, date: formatWhen(date, null, ctx.today), status: input.done ? "done" : "open" });
     },
   });
 

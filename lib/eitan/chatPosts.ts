@@ -7,6 +7,7 @@ import type { FamilyMember, Task } from "@/lib/types";
 import type { ResolvedOccurrence } from "@/lib/recurrence";
 import { formatWhen } from "./time";
 import { effectiveLead, leadLabel } from "@/lib/pushChoice";
+import { taskEmoji } from "@/lib/emoji";
 
 export interface ChatPost {
   dedupeKey: string;
@@ -30,7 +31,7 @@ export function buildChatReminder(occ: ResolvedOccurrence, adults: Named[], toda
   const when = formatWhen(date, t.due_time, today);
   return {
     dedupeKey: `chat:task:${t.id}:${date}`,
-    body: `⏰ תזכורת${who ? ` ${who}` : ""}: ${t.title} · ${when}\nכשזה נעשה, כתבו לי ״בוצע״.`,
+    body: `${taskEmoji(t)} תזכורת${who ? ` ${who}` : ""}: ${t.title} · ${when}\nכשזה נעשה, כתבו לי ״בוצע״.`,
     meta: { kind: "reminder", task_ids: [t.id], occurrence_date: date },
   };
 }
@@ -46,7 +47,7 @@ export function buildChatDigest(
 
   const line = (t: Task, time: string | null) => {
     const who = forWhomPhrase(t, adults);
-    return `• ${time ? `${time.slice(0, 5)} ` : ""}${t.title}${who ? ` (${who})` : ""}`;
+    return `${taskEmoji(t)} ${time ? `${time.slice(0, 5)} ` : ""}${t.title}${who ? ` (${who})` : ""}`;
   };
 
   const sorted = today
@@ -83,7 +84,7 @@ export function buildChatDigest(
  */
 export function buildTaskSavedPost(task: Task, adults: Named[], today: string): ChatPost {
   const who = task.is_shared ? "שניכם" : adults.find((a) => a.id === task.assignee_id)?.name ?? "—";
-  const lines = [`✅ שמרתי: ${task.title}`, `למי: ${who}`];
+  const lines = [`${taskEmoji(task)} שמרתי: ${task.title}`, `למי: ${who}`];
   if (task.due_time) {
     lines.push(`מתי: ${formatWhen(task.due_date, task.due_time, today)}`);
     lines.push(task.push_enabled ? `פוש: ${pushWhen(task)}` : "פוש: בלי");
