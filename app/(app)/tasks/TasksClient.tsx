@@ -377,6 +377,8 @@ export default function TasksClient({
         recurrence_rule: data.recurrence_rule,
         priority: data.priority,
         is_shared: data.is_shared,
+        // Picking an owner here answers Eitan's "למי התזכורת?" (migration 022).
+        owner_pending: !data.is_shared && !data.assignee_id,
         updated_at: new Date().toISOString(),
       })
       .eq("id", id);

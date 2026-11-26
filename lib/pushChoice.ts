@@ -25,6 +25,6 @@ export function effectiveLead(task: Pick<Task, "push_lead_minutes">): number {
 /** One line describing when the push goes out, for Eitan and the chat card. */
 export function pushLabel(task: Pick<Task, "push_enabled" | "push_lead_minutes" | "due_time">): string {
   if (!task.push_enabled) return "בלי פוש";
-  if (!task.due_time) return "בלי שעה, אז אין פוש (רק בסיכום של 07:30)";
+  if (!task.due_time) return "עוד לא נקבעה שעה לתזכורת";
   return `פוש ${leadLabel(effectiveLead(task))}`;
 }

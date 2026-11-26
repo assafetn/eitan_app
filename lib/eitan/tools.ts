@@ -29,7 +29,7 @@ export interface EitanContext {
 const TASK_SELECT =
   "*, assignee:family_members!tasks_assignee_id_fkey(*), child:family_members!tasks_child_id_fkey(*)";
 
-type ForWhom = "sender" | "other" | "both";
+type ForWhom = "sender" | "other" | "both" | "ask";
 
 // ── data access ──────────────────────────────────────────
 
@@ -46,6 +46,7 @@ export async function loadTasks(supabase: SupabaseClient): Promise<{ tasks: Task
 }
 
 function peopleLabel(task: Task, ctx: EitanContext): string {
+  if (task.owner_pending) return "עוד לא נקבע (שאלת למי)";
   if (task.is_shared) return "שניכם";
   if (task.assignee_id) return ctx.adults.find((a) => a.id === task.assignee_id)?.name ?? "לא ידוע";
   return "שניכם"; // no owner can no longer happen (migration 019)
@@ -109,15 +110,21 @@ export async function loadMemories(ctx: EitanContext, cap = 200) {
 
 // ── input normalisation ──────────────────────────────────
 
-function resolvePeople(forWhom: ForWhom, ctx: EitanContext): { assignee_id: string | null; is_shared: boolean } {
+function resolvePeople(
+  forWhom: ForWhom,
+  ctx: EitanContext
+): { assignee_id: string | null; is_shared: boolean; owner_pending: boolean } {
   switch (forWhom) {
     case "sender":
-      return { assignee_id: ctx.sender.id, is_shared: false };
+      return { assignee_id: ctx.sender.id, is_shared: false, owner_pending: false };
     case "other":
-      return { assignee_id: ctx.otherAdult?.id ?? ctx.sender.id, is_shared: false };
+      return { assignee_id: ctx.otherAdult?.id ?? ctx.sender.id, is_shared: false, owner_pending: false };
+    case "ask":
+      // Saved without an owner; the chat card asks "למי התזכורת?".
+      return { assignee_id: null, is_shared: false, owner_pending: true };
     case "both":
     default:
-      return { assignee_id: null, is_shared: true };
+      return { assignee_id: null, is_shared: true, owner_pending: false };
   }
 }
 
@@ -144,7 +151,15 @@ const FOR_WHOM = {
   type: "string",
   enum: ["sender", "other", "both"],
   description:
-    'Who owns it (every task has an owner, and only the owner gets its reminders): "sender" = the adult who wrote the message ("לי", "תזכיר לי"); "other" = the other adult; "both" = the two adults together ("לנו", "לשנינו", or when it is about the family/kids and nobody was named).',
+    'Who owns it (only the owner gets its reminders): "sender" = the adult who wrote the message ("לי", "תזכיר לי"); "other" = the other adult (by name, "לה"/"לו"); "both" = the two adults together ("לנו", "לשנינו").',
+} as const;
+
+const FOR_WHOM_NEW = {
+  type: "string",
+  enum: ["sender", "other", "both", "ask"],
+  description:
+    FOR_WHOM.description +
+    ' "ask" = the message does not say whose it is: never guess, save it with "ask" and ask "למי התזכורת?" (the app shows buttons for each adult and both).',
 } as const;
 
 const PUSH_BEFORE = {
@@ -207,7 +222,7 @@ export function makeTools(ctx: EitanContext) {
       type: "object",
       properties: {
         title: { type: "string", description: "Short Hebrew title, e.g. 'לקחת את איתן לרופא'" },
-        for_whom: FOR_WHOM,
+        for_whom: FOR_WHOM_NEW,
         child_id: { type: ["string", "null"], description: "Id of the child this is about, from the family list, or null." },
         due_date: { type: ["string", "null"], description: "YYYY-MM-DD in Jerusalem, or null for an undated to-do." },
         due_time: { type: ["string", "null"], description: "HH:MM 24h, or null." },

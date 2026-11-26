@@ -17,7 +17,7 @@ const STICK_TO_BOTTOM_PX = 120;
 const MAX_LEN = 4000; // mirrors the DB check constraint
 const SAVE_FAILED = "השינוי לא נשמר, נסו שוב";
 const CARD_TASK_SELECT =
-  "id, title, due_date, due_time, assignee_id, is_shared, push_enabled, push_lead_minutes, status, recurrence_rule";
+  "id, title, due_date, due_time, assignee_id, is_shared, owner_pending, push_enabled, push_lead_minutes, status, recurrence_rule";
 // Cards are only loaded for the tasks of the most recent replies.
 const MAX_CARD_TASKS = 60;
 

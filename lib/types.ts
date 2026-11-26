@@ -77,6 +77,8 @@ export interface Task {
   // due_time. null lead = the owner's reminder_lead_minutes (30).
   push_enabled: boolean;
   push_lead_minutes: number | null;
+  // Eitan couldn't tell whose it is and asked in the chat (migration 022).
+  owner_pending: boolean;
   created_by: string;
   completed_at: string | null;
   created_at: string;
