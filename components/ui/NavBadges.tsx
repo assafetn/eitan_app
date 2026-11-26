@@ -87,9 +87,9 @@ export async function NavBadge({ kind, inline = false }: { kind: "tasks"; inline
           ...(inline
             ? { position: "static" as const }
             : { position: "absolute" as const, top: -6, insetInlineStart: -6 }), // top-start corner (top-right in RTL)
-          minWidth: 16,
-          height: 16,
-          paddingInline: display.length > 1 ? 4 : 0,
+          minWidth: 18,
+          height: 18,
+          paddingInline: display.length > 1 ? 5 : 0,
           boxSizing: "border-box",
           display: "inline-flex",
           alignItems: "center",
@@ -98,7 +98,7 @@ export async function NavBadge({ kind, inline = false }: { kind: "tasks"; inline
           background: "var(--jmh-coral)",
           color: "var(--text-on-blue)",
           fontFamily: "var(--font)",
-          fontSize: 11,
+          fontSize: "var(--text-xs)", // the 12px floor
           fontWeight: 600,
           lineHeight: 1,
           fontVariantNumeric: "tabular-nums",

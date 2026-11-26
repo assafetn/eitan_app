@@ -1,40 +1,27 @@
-import { SkelBar, SkelList, SkelPageShell } from "@/components/ui/Skeleton";
+import { SkelBar, SkelGroup, SkelPageShell } from "@/components/ui/Skeleton";
 
-// Matches TasksClient: title + "add" pill, the filter chip rows, then a task
-// list.
+// Matches TasksClient: title + "add" pill, the mine/all segmented control,
+// then the sections as inset groups.
 export default function TasksLoading() {
   return (
     <SkelPageShell>
-      {/* Header: title + add button */}
       <div
         style={{
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
-          marginBottom: "var(--sp-6)",
+          minHeight: 44,
+          margin: "var(--sp-2) 0 var(--sp-5)",
         }}
       >
         <SkelBar w="35%" h={28} radius="var(--r-md)" />
-        <SkelBar w={120} h={40} radius="var(--r-full)" />
+        <SkelBar w={112} h={40} radius="var(--r-full)" />
       </div>
 
-      {/* Filter chip rows */}
-      <div style={{ display: "flex", gap: "var(--sp-2)", flexWrap: "wrap", marginBottom: "var(--sp-3)" }}>
-        {[64, 88, 72, 96].map((w, i) => (
-          <SkelBar key={i} w={w} h={32} radius="var(--r-full)" />
-        ))}
-      </div>
-      <div style={{ display: "flex", gap: "var(--sp-2)", marginBottom: "var(--sp-6)" }}>
-        {[48, 80, 80].map((w, i) => (
-          <SkelBar key={i} w={w} h={30} radius="var(--r-full)" />
-        ))}
-      </div>
+      <SkelBar w="100%" h={40} radius="var(--r-full)" style={{ marginBottom: "var(--sp-6)" }} />
 
-      {/* Section label + task rows */}
-      <div style={{ marginBottom: "var(--sp-2)" }}>
-        <SkelBar w="20%" h={10} />
-      </div>
-      <SkelList count={6} />
+      <SkelGroup count={3} />
+      <SkelGroup count={2} />
     </SkelPageShell>
   );
 }

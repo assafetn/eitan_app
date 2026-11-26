@@ -10,102 +10,111 @@
    Only the COLOR + SHADOW tokens are themed. Type scale, spacing, radius,
    motion and fonts are theme-independent and live in the shared block below.
    ───────────────────────────────────────────────────────────────────────── */
+/* Design context: .impeccable.md — calm, warm, trustworthy. Neutrals are a
+   warm paper (light) / warm charcoal matching the app-icon tile (dark); the
+   blue is rare: primary action, my own bubbles, the current state. */
 :root,
 [data-theme="light"] {
   color-scheme: light;
 
-  /* PRIMARY — Sky Blue scale */
-  --jmh-blue:        oklch(0.54 0.14 240);
-  --jmh-blue-80:     oklch(0.63 0.11 240);
-  --jmh-blue-60:     oklch(0.72 0.08 240);
-  --jmh-blue-30:     oklch(0.84 0.05 240);
-  --jmh-blue-10:     oklch(0.93 0.025 240);
-  --jmh-blue-05:     oklch(0.97 0.012 240);
+  /* PRIMARY — calm sky blue */
+  --jmh-blue:        oklch(0.53 0.115 245);
+  --jmh-blue-80:     oklch(0.61 0.100 245);
+  --jmh-blue-60:     oklch(0.71 0.075 245);
+  --jmh-blue-30:     oklch(0.84 0.045 245);
+  --jmh-blue-10:     oklch(0.925 0.022 245);
+  --jmh-blue-05:     oklch(0.960 0.013 245);
 
-  /* SECONDARY — Periwinkle */
-  --jmh-periwinkle:    oklch(0.68 0.10 255);
-  --jmh-periwinkle-bg: oklch(0.97 0.015 255);
+  /* SECONDARY — Periwinkle (Eitan's voice in the chat) */
+  --jmh-periwinkle:    oklch(0.56 0.090 268);
+  --jmh-periwinkle-bg: oklch(0.955 0.016 268);
 
   /* SEMANTIC */
-  --jmh-sage:        oklch(0.60 0.09 148);
-  --jmh-sage-bg:     oklch(0.96 0.020 148);
-  --jmh-coral:       oklch(0.60 0.15 22);
-  --jmh-coral-bg:    oklch(0.97 0.022 22);
-  --jmh-gold:        oklch(0.72 0.10 88);
-  --jmh-gold-bg:     oklch(0.97 0.020 88);
+  --jmh-sage:        oklch(0.57 0.090 150);
+  --jmh-sage-bg:     oklch(0.955 0.022 150);
+  --jmh-coral:       oklch(0.58 0.150 28);
+  --jmh-coral-bg:    oklch(0.960 0.022 28);
+  --jmh-gold:        oklch(0.70 0.110 80);
+  --jmh-gold-bg:     oklch(0.960 0.026 85);
 
-  /* NEUTRALS */
-  --bg:              oklch(0.980 0.007 240);
-  --surface:         oklch(1.000 0.000 0);
-  --border:          oklch(0.910 0.012 240);
-  --border-strong:   oklch(0.820 0.020 240);
+  /* NEUTRALS — warm paper */
+  --bg:              oklch(0.972 0.006 80);
+  --surface:         oklch(0.995 0.003 85);
+  --border:          oklch(0.905 0.008 75);
+  --border-strong:   oklch(0.820 0.012 75);
+  /* Segmented-control track/thumb and pressed rows. */
+  --fill:            oklch(0.935 0.008 75);
+  --fill-thumb:      oklch(0.995 0.003 85);
 
-  /* TEXT */
-  --text-primary:    oklch(0.20 0.035 245);
-  --text-secondary:  oklch(0.46 0.025 245);
-  --text-muted:      oklch(0.64 0.018 245);
-  --text-on-blue:    oklch(0.98 0.004 240);
+  /* TEXT — warm ink. --text-muted at 0.55 keeps ≥4.5:1 on --bg. */
+  --text-primary:    oklch(0.235 0.012 60);
+  --text-secondary:  oklch(0.450 0.012 60);
+  --text-muted:      oklch(0.550 0.010 60);
+  --text-on-blue:    oklch(0.990 0.004 85);
 
-  /* SHADOWS — tinted with primary blue */
-  --shadow-sm: 0 1px 3px oklch(0.54 0.14 240 / 0.07), 0 1px 2px oklch(0.54 0.14 240 / 0.04);
-  --shadow-md: 0 4px 12px oklch(0.54 0.14 240 / 0.09), 0 2px 4px oklch(0.54 0.14 240 / 0.05);
-  --shadow-lg: 0 12px 32px oklch(0.54 0.14 240 / 0.10), 0 4px 8px oklch(0.54 0.14 240 / 0.06);
-  --shadow-xl: 0 24px 64px oklch(0.54 0.14 240 / 0.12), 0 8px 16px oklch(0.54 0.14 240 / 0.07);
+  /* SHADOWS — warm and faint; only floating things (sheets, dialogs, toasts,
+     segmented thumbs) carry one. */
+  --shadow-sm: 0 1px 2px oklch(0.30 0.02 60 / 0.06), 0 0 0 0.5px oklch(0.30 0.02 60 / 0.04);
+  --shadow-md: 0 4px 14px oklch(0.30 0.02 60 / 0.08), 0 1px 3px oklch(0.30 0.02 60 / 0.05);
+  --shadow-lg: 0 12px 32px oklch(0.30 0.02 60 / 0.10), 0 4px 8px oklch(0.30 0.02 60 / 0.05);
+  --shadow-xl: 0 24px 64px oklch(0.30 0.02 60 / 0.14), 0 8px 16px oklch(0.30 0.02 60 / 0.06);
 
   /* SCRIM — the single modal/sheet backdrop value */
-  --overlay: oklch(0.13 0.020 240 / 0.4);
+  --overlay: oklch(0.20 0.010 60 / 0.32);
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
-   DARK theme. Overrides ONLY color + shadow tokens; everything structural
-   is inherited from the shared block below.
+   DARK theme — warm charcoal, the same family as the app-icon tile.
+   Overrides ONLY color + shadow tokens; everything structural is inherited
+   from the shared block below.
    ───────────────────────────────────────────────────────────────────────── */
 [data-theme="dark"] {
   color-scheme: dark;
 
   /* PRIMARY — inverted ramp: --jmh-blue is the readable accent ON dark,
      -05/-10 are the subtlest tints ABOVE the background */
-  --jmh-blue:        oklch(0.70 0.12 240);
-  --jmh-blue-80:     oklch(0.63 0.11 240);
-  --jmh-blue-60:     oklch(0.55 0.10 240);
-  --jmh-blue-30:     oklch(0.42 0.07 240);
-  --jmh-blue-10:     oklch(0.31 0.045 240);
-  --jmh-blue-05:     oklch(0.26 0.030 240);
+  --jmh-blue:        oklch(0.74 0.105 240);
+  --jmh-blue-80:     oklch(0.65 0.100 240);
+  --jmh-blue-60:     oklch(0.56 0.090 242);
+  --jmh-blue-30:     oklch(0.43 0.065 245);
+  --jmh-blue-10:     oklch(0.31 0.040 245);
+  --jmh-blue-05:     oklch(0.265 0.026 245);
 
   /* SECONDARY */
-  --jmh-periwinkle:    oklch(0.74 0.10 255);
-  --jmh-periwinkle-bg: oklch(0.29 0.035 255);
+  --jmh-periwinkle:    oklch(0.77 0.080 268);
+  --jmh-periwinkle-bg: oklch(0.275 0.022 268);
 
   /* SEMANTIC */
-  --jmh-sage:        oklch(0.72 0.10 148);
-  --jmh-sage-bg:     oklch(0.28 0.035 148);
-  --jmh-coral:       oklch(0.72 0.14 22);
-  --jmh-coral-bg:    oklch(0.30 0.045 22);
-  --jmh-gold:        oklch(0.80 0.10 88);
-  --jmh-gold-bg:     oklch(0.30 0.038 88);
+  --jmh-sage:        oklch(0.74 0.100 150);
+  --jmh-sage-bg:     oklch(0.275 0.030 150);
+  --jmh-coral:       oklch(0.73 0.130 28);
+  --jmh-coral-bg:    oklch(0.290 0.040 28);
+  --jmh-gold:        oklch(0.81 0.100 85);
+  --jmh-gold-bg:     oklch(0.290 0.034 85);
 
-  /* NEUTRALS */
-  --bg:              oklch(0.190 0.018 245);
-  --surface:         oklch(0.235 0.020 245);
-  --border:          oklch(0.300 0.018 245);
-  --border-strong:   oklch(0.400 0.020 245);
+  /* NEUTRALS — warm charcoal */
+  --bg:              oklch(0.180 0.005 70);
+  --surface:         oklch(0.225 0.006 70);
+  --border:          oklch(0.300 0.007 70);
+  --border-strong:   oklch(0.400 0.009 70);
+  --fill:            oklch(0.265 0.006 70);
+  --fill-thumb:      oklch(0.360 0.008 70);
 
-  /* TEXT — note --text-on-blue flips DARK, because --jmh-blue is now light */
-  --text-primary:    oklch(0.960 0.006 245);
-  --text-secondary:  oklch(0.780 0.014 245);
-  /* 0.620 is the floor here: --text-muted on --surface measures 4.58:1, the
-     tightest pair in the palette. Anything lower drops under AA. */
-  --text-muted:      oklch(0.620 0.016 245);
-  --text-on-blue:    oklch(0.180 0.020 245);
+  /* TEXT — note --text-on-blue flips DARK, because --jmh-blue is now light.
+     --text-muted on --surface measures ≥4.5:1. */
+  --text-primary:    oklch(0.950 0.005 80);
+  --text-secondary:  oklch(0.790 0.008 75);
+  --text-muted:      oklch(0.660 0.008 75);
+  --text-on-blue:    oklch(0.190 0.012 245);
 
-  /* ELEVATION — blue-tinted low-opacity shadows are invisible on dark.
+  /* ELEVATION — tinted low-opacity shadows are invisible on dark.
      Use near-black, higher opacity. */
-  --shadow-sm: 0 1px 3px oklch(0 0 0 / 0.40), 0 1px 2px oklch(0 0 0 / 0.30);
-  --shadow-md: 0 4px 12px oklch(0 0 0 / 0.45), 0 2px 4px oklch(0 0 0 / 0.32);
+  --shadow-sm: 0 1px 2px oklch(0 0 0 / 0.35), 0 0 0 0.5px oklch(0 0 0 / 0.25);
+  --shadow-md: 0 4px 14px oklch(0 0 0 / 0.42), 0 1px 3px oklch(0 0 0 / 0.30);
   --shadow-lg: 0 12px 32px oklch(0 0 0 / 0.50), 0 4px 8px oklch(0 0 0 / 0.35);
   --shadow-xl: 0 24px 64px oklch(0 0 0 / 0.55), 0 8px 16px oklch(0 0 0 / 0.40);
 
-  --overlay: oklch(0.08 0.012 240 / 0.62);
+  --overlay: oklch(0.08 0.006 70 / 0.60);
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
@@ -117,6 +126,9 @@
      --font-rubik is set on <html> by next/font in app/layout.tsx (self-hosted,
      no render-blocking stylesheet). */
   --font:            var(--font-rubik), system-ui, -apple-system, sans-serif;
+  /* Large page titles and the login wordmark only: a classical Hebrew book
+     face for warmth. Everything else is Rubik. */
+  --font-display:    var(--font-frank), var(--font-rubik), serif;
   --font-mono:       ui-monospace, 'Courier New', monospace;
 
   /* TYPE SCALE */
@@ -202,23 +214,141 @@ button {
   color-scheme: inherit;
 }
 
-/* Task row. Hover lift only on devices that really hover (on phones a sticky
-   :hover would leave rows "lifted" after a tap); press feedback via :active
-   works everywhere. Transform + shadow only — no layout shift. */
-.task-row {
+/* ── Page column + title (every secondary screen) ─────────────────────── */
+.page {
+  width: 100%;
+  max-width: 600px;
+  margin: 0 auto;
+  padding: var(--sp-4) var(--sp-4) var(--sp-12);
+}
+.page-title {
+  font-family: var(--font-display);
+  font-size: var(--text-2xl);
+  font-weight: 700;
+  line-height: 1.1;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+/* ── Inset grouped list (Reminders-style) ─────────────────────────────────
+   One container per section instead of a shadowed card per row. Rows are
+   separated by a hairline that starts where the row's text starts
+   (--row-inset), drawn by the row itself so it slides with a swiped row. */
+.group-label {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-2);
+  font-family: var(--font);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin: 0 var(--sp-1) var(--sp-2);
+}
+.group-note {
+  font-family: var(--font);
+  font-size: var(--text-xs);
+  line-height: 1.5;
+  color: var(--text-muted);
+  margin: var(--sp-2) var(--sp-1) 0;
+}
+.group {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  overflow: hidden;
+}
+.group-row {
   position: relative;
-  transition: box-shadow var(--dur-fast) var(--ease-out),
-              transform var(--dur-fast) var(--ease-out);
+  background: var(--row-bg, var(--surface));
+  transition: background-color var(--dur-fast) var(--ease-out);
+}
+.group > :not(:first-child) .group-row::after,
+.group > .group-row:not(:first-child)::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  inset-inline-start: var(--row-inset, 16px);
+  inset-inline-end: 0;
+  height: 1px;
+  background: var(--border);
+  pointer-events: none;
+}
+/* Press feedback: a quiet fill, no lift (rows sit inside one container). */
+.group-row--tap {
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.group-row--tap:active {
+  background: color-mix(in oklch, var(--row-bg, var(--surface)), var(--text-primary) 6%);
+  opacity: 1;
 }
 @media (hover: hover) {
-  .task-row--tappable:hover {
-    box-shadow: var(--shadow-md);
-    transform: translateY(-1px);
+  .group-row--tap:hover {
+    background: color-mix(in oklch, var(--row-bg, var(--surface)), var(--text-primary) 3%);
   }
 }
-.task-row--tappable:active {
-  transform: scale(0.985);
+
+/* ── Segmented control (top tabs, task owner view, theme) ────────────────── */
+.seg {
+  display: flex;
+  gap: 2px;
+  padding: 3px;
+  background: var(--fill);
+  border-radius: var(--r-full);
+}
+.seg-option {
+  flex: 1;
+  min-width: 0;
+  min-height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 0 var(--sp-3);
+  border: none;
+  border-radius: var(--r-full);
+  background: transparent;
+  color: var(--text-secondary);
+  font-family: var(--font);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color var(--dur-fast) var(--ease-out),
+              color var(--dur-fast) var(--ease-out),
+              box-shadow var(--dur-fast) var(--ease-out);
+}
+.seg-option[aria-selected="true"],
+.seg-option[aria-checked="true"] {
+  background: var(--fill-thumb);
+  color: var(--text-primary);
+  font-weight: 600;
   box-shadow: var(--shadow-sm);
+}
+
+/* ── Buttons ──────────────────────────────────────────────────────────── */
+/* Tonal: the quiet accent button (a screen's secondary "add"). */
+.btn-tonal {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-1);
+  min-height: 40px;
+  padding: 0 14px;
+  border: none;
+  border-radius: var(--r-full);
+  background: var(--jmh-blue-05);
+  color: var(--jmh-blue);
+  font-family: var(--font);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background-color var(--dur-fast) var(--ease-out);
+}
+@media (hover: hover) {
+  .btn-tonal:hover { background: var(--jmh-blue-10); }
 }
 
 /* Tap feedback for buttons and links across the app — a quick dip in opacity,
@@ -247,11 +377,9 @@ select:focus-visible {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .task-row,
-  .task-row--tappable:hover,
-  .task-row--tappable:active {
+  .group-row,
+  .seg-option {
     transition: none;
-    transform: none;
   }
 }
 
@@ -261,6 +389,24 @@ select:focus-visible {
 }
 .pulse-dot {
   animation: pulse-dot 1.6s ease-in-out infinite;
+}
+
+/* Eitan's typing indicator: three dots rising in turn. */
+@keyframes typing-dot {
+  0%, 60%, 100% { opacity: 0.35; transform: translateY(0); }
+  30% { opacity: 1; transform: translateY(-2px); }
+}
+.typing-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  animation: typing-dot 1.2s var(--ease-out) infinite;
+}
+.typing-dot:nth-child(2) { animation-delay: 0.15s; }
+.typing-dot:nth-child(3) { animation-delay: 0.3s; }
+@media (prefers-reduced-motion: reduce) {
+  .typing-dot { animation: none; opacity: 0.6; }
 }
 
 /* Route-loading skeleton placeholder (opacity pulse only — no new colors). */

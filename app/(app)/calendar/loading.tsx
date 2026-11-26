@@ -1,4 +1,4 @@
-import { SkelBar, SkelList, SkelPageShell } from "@/components/ui/Skeleton";
+import { SkelGroup, SkelPageShell, SkelTitle } from "@/components/ui/Skeleton";
 
 // The /calendar route server-redirects to /tasks (the calendar view no longer
 // exists), so this only flashes momentarily. Kept lightweight and shaped like
@@ -6,10 +6,8 @@ import { SkelBar, SkelList, SkelPageShell } from "@/components/ui/Skeleton";
 export default function CalendarLoading() {
   return (
     <SkelPageShell>
-      <div style={{ marginBottom: "var(--sp-6)" }}>
-        <SkelBar w="35%" h={28} radius="var(--r-md)" />
-      </div>
-      <SkelList count={5} />
+      <SkelTitle w="35%" />
+      <SkelGroup count={4} />
     </SkelPageShell>
   );
 }

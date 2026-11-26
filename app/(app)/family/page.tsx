@@ -1,8 +1,8 @@
 import { createClient } from "@/lib/supabase/server";
 import type { FamilyMember, Task } from "@/lib/types";
 import { openTaskCountsByChild } from "@/lib/stats";
-import Link from "next/link";
-import { ChevronLeft } from "lucide-react";
+import ChildList from "./ChildList";
+import BackLink from "@/components/ui/BackLink";
 
 export const dynamic = "force-dynamic";
 
@@ -37,113 +37,16 @@ export default async function FamilyPage() {
   const counts = openTaskCountsByChild((childTasks as Task[]) ?? []);
 
   return (
-    <div
-      style={{
-        width: "100%",
-        maxWidth: 600,
-        margin: "0 auto",
-        padding: "var(--sp-6) var(--sp-4)",
-        paddingTop: "var(--sp-8)",
-      }}
-    >
-      <h1
-        style={{
-          fontFamily: "var(--font)",
-          fontSize: "var(--text-2xl)",
-          fontWeight: 700,
-          letterSpacing: "-0.03em",
-          color: "var(--text-primary)",
-          margin: "0 0 var(--sp-6)",
-        }}
-      >
+    <div className="page">
+      {/* Family is reached from Settings. */}
+      <BackLink href="/settings" label="הגדרות" />
+      <h1 className="page-title" style={{ margin: "var(--sp-1) 0 var(--sp-6)" }}>
         משפחה
       </h1>
 
-      <div style={{ display: "flex", flexDirection: "column", gap: "var(--sp-3)" }}>
-        {kids.map((child) => {
-          const age = computeAge(child.birthdate);
-          const count = counts.get(child.id) ?? 0;
-          return (
-            <Link
-              key={child.id}
-              href={`/family/${child.id}`}
-              style={{
-                position: "relative",
-                display: "flex",
-                alignItems: "center",
-                gap: "var(--sp-4)",
-                background: "var(--surface)",
-                border: "1px solid var(--border)",
-                borderRadius: "var(--r-lg)",
-                padding: "var(--sp-5)",
-                boxShadow: "var(--shadow-sm)",
-                textDecoration: "none",
-                overflow: "hidden",
-              }}
-            >
-              {/* Color accent stripe (token-driven) */}
-              <span
-                style={{
-                  position: "absolute",
-                  insetInlineStart: 0,
-                  top: 0,
-                  bottom: 0,
-                  width: 4,
-                  background: `var(--${child.color})`,
-                }}
-              />
-
-              {/* Initial chip in the child's color */}
-              <span
-                style={{
-                  width: 44,
-                  height: 44,
-                  borderRadius: "var(--r-full)",
-                  background: `var(--${child.color}-bg, var(--jmh-blue-05))`,
-                  border: `1px solid var(--${child.color})`,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  flexShrink: 0,
-                  fontFamily: "var(--font)",
-                  fontSize: "var(--text-md)",
-                  fontWeight: 700,
-                  color: `var(--${child.color})`,
-                }}
-              >
-                {child.name.slice(0, 1)}
-              </span>
-
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div
-                  style={{
-                    fontFamily: "var(--font)",
-                    fontSize: "var(--text-md)",
-                    fontWeight: 600,
-                    color: "var(--text-primary)",
-                  }}
-                >
-                  {child.name}
-                </div>
-                <div
-                  style={{
-                    fontFamily: "var(--font)",
-                    fontSize: "var(--text-sm)",
-                    color: "var(--text-muted)",
-                    marginTop: 2,
-                  }}
-                >
-                  {age !== null ? `גיל ${age}` : "גיל לא ידוע"}
-                  {" · "}
-                  {count === 1 ? "משימה אחת פתוחה" : `${count} משימות פתוחות`}
-                </div>
-              </div>
-
-              <ChevronLeft size={18} strokeWidth={2} style={{ color: "var(--text-muted)", flexShrink: 0 }} />
-            </Link>
-          );
-        })}
-      </div>
+      <ChildList
+        items={kids.map((child) => ({ child, age: computeAge(child.birthdate), count: counts.get(child.id) ?? 0 }))}
+      />
     </div>
   );
 }

@@ -17,7 +17,7 @@ import SwipeToDelete from "@/components/ui/SwipeToDelete";
 import AddTaskModal from "@/components/ui/AddTaskModal";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import Toast from "@/components/ui/Toast";
-import { Plus } from "lucide-react";
+import { Check, Plus } from "lucide-react";
 
 const SAVE_FAILED = "השמירה נכשלה, נסו שוב";
 const DELETE_FAILED = "המחיקה נכשלה, נסו שוב";
@@ -29,6 +29,8 @@ interface Props {
   childMembers: FamilyMember[];
   /** Heading shown at the top. Defaults to "משימות". */
   title?: string;
+  /** Optional back link rendered above the title (a child's task page). */
+  back?: React.ReactNode;
   /** Whether to show the "add task" button. Defaults to true. */
   showAddButton?: boolean;
   /** When true, completed occurrences are hidden entirely (open-only view). */
@@ -59,6 +61,7 @@ export default function TasksClient({
   members,
   childMembers,
   title = "משימות",
+  back,
   showAddButton = true,
   openOnly = false,
   myMemberId = null,
@@ -435,117 +438,82 @@ export default function TasksClient({
   }
 
   return (
-    <div
-      style={{
-        width: "100%",
-        maxWidth: 600,
-        margin: "0 auto",
-        padding: "var(--sp-6) var(--sp-4)",
-        paddingTop: "var(--sp-8)",
-      }}
-    >
-      {/* Header */}
+    <div className="page">
+      {back}
+      {/* Header: a large title; "add" is a quiet tonal button — the chat is
+          the main way tasks come in. */}
       <div
         style={{
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
-          marginBottom: "var(--sp-6)",
+          gap: "var(--sp-3)",
+          minHeight: 44,
+          margin: back ? "var(--sp-1) 0 var(--sp-5)" : "var(--sp-2) 0 var(--sp-5)",
         }}
       >
-        <h1
-          style={{
-            fontFamily: "var(--font)",
-            fontSize: "var(--text-2xl)",
-            fontWeight: 700,
-            letterSpacing: "-0.03em",
-            color: "var(--text-primary)",
-            margin: 0,
-          }}
-        >
-          {title}
-        </h1>
+        <h1 className="page-title">{title}</h1>
 
         {showAddButton && (
-        <button
-          onClick={() => setShowAdd(true)}
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: "var(--sp-1)",
-            padding: "10px 16px",
-            background: "var(--jmh-blue)",
-            color: "var(--text-on-blue)",
-            borderRadius: "var(--r-full)",
-            border: "none",
-            fontFamily: "var(--font)",
-            fontWeight: 500,
-            fontSize: "var(--text-sm)",
-            cursor: "pointer",
-            boxShadow: "var(--shadow-sm)",
-            transition: `background var(--dur-fast) var(--ease-out), box-shadow var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out)`,
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.background = "var(--jmh-blue-80)";
-            e.currentTarget.style.boxShadow = "var(--shadow-md)";
-            e.currentTarget.style.transform = "translateY(-1px)";
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.background = "var(--jmh-blue)";
-            e.currentTarget.style.boxShadow = "var(--shadow-sm)";
-            e.currentTarget.style.transform = "translateY(0)";
-          }}
-          onMouseDown={(e) => { e.currentTarget.style.transform = "scale(0.98)"; }}
-          onMouseUp={(e) => { e.currentTarget.style.transform = "translateY(-1px)"; }}
-        >
-          <Plus size={16} strokeWidth={2} />
-          הוספת משימה
-        </button>
+          <button type="button" className="btn-tonal" onClick={() => setShowAdd(true)}>
+            <Plus size={16} strokeWidth={2.2} />
+            משימה חדשה
+          </button>
         )}
       </div>
 
       {myMemberId && <OwnerViewToggle value={view} onChange={chooseView} />}
 
-      {/* Empty state */}
+      {/* Empty state — teaches where tasks come from. */}
       {visible.length === 0 && (
         <div
           style={{
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            gap: "var(--sp-2)",
             textAlign: "center",
-            padding: "var(--sp-16) var(--sp-6)",
-            color: "var(--text-muted)",
+            padding: "var(--sp-12) var(--sp-6)",
+            fontFamily: "var(--font)",
           }}
         >
-          <svg
-            width="40"
-            height="40"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="var(--border-strong)"
-            strokeWidth="1.5"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            style={{ marginBottom: "var(--sp-4)" }}
+          <span
+            aria-hidden="true"
+            style={{
+              width: 48,
+              height: 48,
+              borderRadius: "50%",
+              display: "grid",
+              placeItems: "center",
+              background: "var(--jmh-sage-bg)",
+              color: "var(--jmh-sage)",
+              marginBottom: "var(--sp-2)",
+            }}
           >
-            <path d="M9 11l3 3L22 4" />
-            <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
-          </svg>
-          <p style={{ fontFamily: "var(--font)", fontSize: "var(--text-base)", margin: 0 }}>
+            <Check size={22} strokeWidth={2.2} />
+          </span>
+          <p style={{ fontSize: "var(--text-md)", fontWeight: 600, color: "var(--text-primary)", margin: 0 }}>
             {filterMine ? "אין לך משימות פתוחות" : "אין משימות פתוחות"}
           </p>
+          {showAddButton && (
+            <p style={{ fontSize: "var(--text-sm)", color: "var(--text-muted)", margin: 0, lineHeight: 1.5 }}>
+              כתבו לאיתן בצ׳אט, והמשימה תופיע כאן.
+            </p>
+          )}
         </div>
       )}
 
       {overdue.length > 0 && (
-        <Section title="באיחור" accent>{overdue.map(renderRow)}</Section>
+        <Section title="באיחור" count={overdue.length} accent>{overdue.map(renderRow)}</Section>
       )}
       {today.length > 0 && (
-        <Section title="היום">{today.map(renderRow)}</Section>
+        <Section title="היום" count={today.length}>{today.map(renderRow)}</Section>
       )}
       {upcoming.length > 0 && (
-        <Section title="קרוב">{upcoming.map(renderRow)}</Section>
+        <Section title="קרוב" count={upcoming.length}>{upcoming.map(renderRow)}</Section>
       )}
       {noDate.length > 0 && (
-        <Section title="ללא תאריך">{noDate.map(renderRow)}</Section>
+        <Section title="ללא תאריך" count={noDate.length}>{noDate.map(renderRow)}</Section>
       )}
 
       {(showAdd || editingTask) && (
@@ -588,53 +556,26 @@ export default function TasksClient({
   );
 }
 
-// "המשימות שלי" / "כל המשימות" — a two-option pill track like the top tabs.
+// "המשימות שלי" / "כל המשימות" — the same segmented control as the top tabs.
 function OwnerViewToggle({ value, onChange }: { value: OwnerView; onChange: (v: OwnerView) => void }) {
   const options: { v: OwnerView; label: string }[] = [
     { v: "mine", label: "המשימות שלי" },
     { v: "all", label: "כל המשימות" },
   ];
   return (
-    <div
-      role="radiogroup"
-      aria-label="אילו משימות להציג"
-      style={{
-        display: "flex",
-        gap: 4,
-        padding: 4,
-        marginBottom: "var(--sp-5)",
-        background: "var(--surface)",
-        border: "1px solid var(--border)",
-        borderRadius: "var(--r-full)",
-      }}
-    >
-      {options.map((o) => {
-        const active = value === o.v;
-        return (
-          <button
-            key={o.v}
-            type="button"
-            role="radio"
-            aria-checked={active}
-            onClick={() => onChange(o.v)}
-            style={{
-              flex: 1,
-              minHeight: 36,
-              border: "none",
-              borderRadius: "var(--r-full)",
-              background: active ? "var(--jmh-blue-05)" : "transparent",
-              color: active ? "var(--jmh-blue)" : "var(--text-secondary)",
-              fontFamily: "var(--font)",
-              fontSize: "var(--text-sm)",
-              fontWeight: active ? 600 : 500,
-              cursor: "pointer",
-              transition: "background var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out)",
-            }}
-          >
-            {o.label}
-          </button>
-        );
-      })}
+    <div role="radiogroup" aria-label="אילו משימות להציג" className="seg" style={{ marginBottom: "var(--sp-6)" }}>
+      {options.map((o) => (
+        <button
+          key={o.v}
+          type="button"
+          role="radio"
+          className="seg-option"
+          aria-checked={value === o.v}
+          onClick={() => onChange(o.v)}
+        >
+          {o.label}
+        </button>
+      ))}
     </div>
   );
 }
@@ -679,32 +620,29 @@ function groupOccurrences(occs: Occurrence[]) {
   return { overdue, today, upcoming: upcomingCollapsed, noDate };
 }
 
+// One inset group per section (Reminders-style): a label with its count,
+// then the rows in a single container separated by hairlines.
 function Section({
   title,
+  count,
   children,
   accent = false,
 }: {
   title: string;
+  count: number;
   children: React.ReactNode;
   /** Coral header for the overdue group (reuses the existing overdue token). */
   accent?: boolean;
 }) {
   return (
-    <div style={{ marginBottom: "var(--sp-6)" }}>
-      <p
-        style={{
-          fontFamily: "var(--font)",
-          fontSize: "var(--text-xs)",
-          fontWeight: accent ? 600 : 500,
-          color: accent ? "var(--jmh-coral)" : "var(--text-muted)",
-          margin: "0 0 var(--sp-2)",
-        }}
-      >
+    <section style={{ marginBottom: "var(--sp-6)" }}>
+      <h2 className="group-label" style={accent ? { color: "var(--jmh-coral)" } : undefined}>
         {title}
-      </p>
-      <div style={{ display: "flex", flexDirection: "column", gap: "var(--sp-2)" }}>
-        {children}
-      </div>
-    </div>
+        <span style={{ fontWeight: 400, color: accent ? "inherit" : "var(--text-muted)", opacity: accent ? 0.8 : 1 }}>
+          {count}
+        </span>
+      </h2>
+      <div className="group">{children}</div>
+    </section>
   );
 }

@@ -21,122 +21,92 @@ export default async function LoginPage({
     <main
       style={{
         minHeight: "100dvh",
-        background: `radial-gradient(ellipse 100% 50% at 50% 0%, var(--jmh-blue-10) 0%, var(--bg) 68%)`,
+        background: "var(--bg)",
         display: "flex",
         flexDirection: "column",
         alignItems: "center",
         justifyContent: "center",
         padding: "var(--sp-6)",
+        paddingTop: "max(var(--sp-6), env(safe-area-inset-top))",
+        paddingBottom: "max(var(--sp-6), env(safe-area-inset-bottom))",
       }}
     >
       <div
         style={{
           width: "100%",
-          maxWidth: 360,
+          maxWidth: 340,
           display: "flex",
           flexDirection: "column",
           alignItems: "center",
-          gap: "var(--sp-8)",
+          textAlign: "center",
         }}
       >
-        {/* Logo mark */}
-        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "var(--sp-4)" }}>
-          <div
-            style={{
-              width: 64,
-              height: 64,
-              borderRadius: "var(--r-lg)",
-              background: "var(--jmh-blue)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              boxShadow: "var(--shadow-md)",
-            }}
-          >
-            <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
-              <path
-                d="M8 9C8 9 10 7 16 7C22 7 24 9 24 9"
-                stroke="var(--text-on-blue)"
-                strokeWidth="2"
-                strokeLinecap="round"
-              />
-              <circle cx="10" cy="16" r="3" fill="var(--text-on-blue)" fillOpacity="0.9" />
-              <circle cx="22" cy="16" r="3" fill="var(--text-on-blue)" fillOpacity="0.9" />
-              <circle cx="13" cy="22" r="2" fill="var(--text-on-blue)" fillOpacity="0.6" />
-              <circle cx="19" cy="22" r="2" fill="var(--text-on-blue)" fillOpacity="0.6" />
-            </svg>
-          </div>
+        {/* The real app icon: the same charcoal tile as on the home screen. */}
+        <img
+          src="/apple-touch-icon.png"
+          alt=""
+          width={72}
+          height={72}
+          style={{ borderRadius: 18, boxShadow: "var(--shadow-md)", marginBottom: "var(--sp-6)" }}
+        />
 
-          <div style={{ textAlign: "center" }}>
-            <h1
-              style={{
-                fontFamily: "var(--font)",
-                fontSize: "var(--text-2xl)",
-                fontWeight: 700,
-                letterSpacing: "-0.03em",
-                color: "var(--text-primary)",
-                margin: 0,
-              }}
-            >
-              {APP_NAME}
-            </h1>
-            <p
-              style={{
-                fontFamily: "var(--font)",
-                fontSize: "var(--text-sm)",
-                color: "var(--text-muted)",
-                margin: "var(--sp-1) 0 0",
-              }}
-            >
-              לוח בקרה משפחתי
-            </p>
-          </div>
-        </div>
-
-        {/* Card */}
-        <div
+        <h1
           style={{
-            width: "100%",
-            background: "var(--surface)",
-            border: "1px solid var(--border)",
-            borderRadius: "var(--r-lg)",
-            padding: "var(--sp-6)",
-            boxShadow: "var(--shadow-sm)",
-            display: "flex",
-            flexDirection: "column",
-            gap: "var(--sp-4)",
+            fontFamily: "var(--font-display)",
+            fontSize: "var(--text-3xl)",
+            fontWeight: 700,
+            lineHeight: 1,
+            color: "var(--text-primary)",
+            margin: 0,
           }}
         >
-          {params.error && (
-            <p
-              style={{
-                fontSize: "var(--text-sm)",
-                color: "var(--jmh-coral)",
-                background: "var(--jmh-coral-bg)",
-                border: "1px solid var(--jmh-coral)",
-                borderRadius: "var(--r-sm)",
-                padding: "var(--sp-2) var(--sp-3)",
-                margin: 0,
-              }}
-            >
-              שגיאה בהתחברות. נסו שוב.
-            </p>
-          )}
+          {APP_NAME}
+        </h1>
+        <p
+          style={{
+            fontFamily: "var(--font)",
+            fontSize: "var(--text-base)",
+            lineHeight: 1.5,
+            color: "var(--text-secondary)",
+            margin: "var(--sp-3) 0 var(--sp-10)",
+          }}
+        >
+          המשימות והתזכורות של הבית,
+          <br />
+          בשיחה אחת.
+        </p>
 
+        {params.error && (
           <p
+            role="alert"
             style={{
+              width: "100%",
               fontFamily: "var(--font)",
-              fontSize: "var(--text-base)",
-              color: "var(--text-secondary)",
-              margin: 0,
-              lineHeight: 1.5,
+              fontSize: "var(--text-sm)",
+              color: "var(--jmh-coral)",
+              background: "var(--jmh-coral-bg)",
+              borderRadius: "var(--r-md)",
+              padding: "var(--sp-2) var(--sp-3)",
+              margin: "0 0 var(--sp-4)",
             }}
           >
-            התחברו עם חשבון ה-Google המשפחתי שלכם.
+            שגיאה בהתחברות. נסו שוב.
           </p>
+        )}
 
-          <LoginButton />
-        </div>
+        <LoginButton />
+
+        <p
+          style={{
+            fontFamily: "var(--font)",
+            fontSize: "var(--text-xs)",
+            lineHeight: 1.5,
+            color: "var(--text-muted)",
+            margin: "var(--sp-4) 0 0",
+          }}
+        >
+          התחברו עם חשבון ה-Google המשפחתי שלכם.
+        </p>
       </div>
     </main>
   );

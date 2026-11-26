@@ -1,24 +1,21 @@
-import { SkelBar, SkelList, SkelPageShell } from "@/components/ui/Skeleton";
+import { SkelBar, SkelGroup, SkelPageShell, SkelTitle } from "@/components/ui/Skeleton";
 
-// Matches SettingsClient: a back-header, then a couple of labelled sections of
-// rows (appearance, family, notifications).
+// Matches SettingsClient: back link + title, then the appearance segmented
+// control and the family / notifications groups.
 export default function SettingsLoading() {
   return (
     <SkelPageShell>
-      {/* Back header */}
-      <div style={{ display: "flex", alignItems: "center", gap: "var(--sp-3)", marginBottom: "var(--sp-6)" }}>
-        <SkelBar w={40} h={40} radius="var(--r-full)" />
-        <SkelBar w="35%" h={28} radius="var(--r-md)" />
+      <SkelTitle w="35%" back />
+
+      <div style={{ marginBottom: "var(--sp-8)" }}>
+        <div style={{ margin: "0 var(--sp-1) var(--sp-2)" }}>
+          <SkelBar w={48} h={12} />
+        </div>
+        <SkelBar w="100%" h={46} radius="var(--r-full)" />
       </div>
 
-      {Array.from({ length: 2 }).map((_, s) => (
-        <div key={s} style={{ marginBottom: "var(--sp-6)" }}>
-          <div style={{ marginBottom: "var(--sp-3)" }}>
-            <SkelBar w="30%" h={12} />
-          </div>
-          <SkelList count={3} />
-        </div>
-      ))}
+      <SkelGroup count={1} lead={32} />
+      <SkelGroup count={1} lead={32} />
     </SkelPageShell>
   );
 }

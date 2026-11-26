@@ -83,20 +83,20 @@ export default function TaskControls({ task, adults, onPatch }: Props) {
     <div
       dir="rtl"
       style={{
-        maxWidth: "82%",
+        maxWidth: "80%",
         marginTop: 4,
         display: "flex",
         flexDirection: "column",
         gap: 8,
         background: "var(--surface)",
         border: "1px solid var(--border)",
-        borderRadius: "var(--r-md)",
-        padding: "8px 10px",
+        borderRadius: 14,
+        padding: "8px 10px 10px",
         fontFamily: "var(--font)",
         color: "var(--text-primary)",
       }}
     >
-      <span style={{ fontSize: "var(--text-xs)", color: "var(--text-secondary)" }}>{task.title}</span>
+      <span style={{ fontSize: "var(--text-xs)", color: "var(--text-muted)" }}>{task.title}</span>
 
       {needsOwner && (
         <Question title="למי התזכורת?">

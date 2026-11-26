@@ -55,7 +55,7 @@ const inputStyle: React.CSSProperties = {
   width: "100%",
   padding: "10px 12px",
   background: "var(--bg)",
-  border: "1px solid var(--border-strong)",
+  border: "1px solid var(--border)",
   borderRadius: "var(--r-md)",
   fontFamily: "var(--font)",
   fontSize: "var(--text-input)", // ≥16px, or iOS zooms on focus
@@ -69,8 +69,8 @@ const inputStyle: React.CSSProperties = {
 const fieldLabelStyle: React.CSSProperties = {
   fontFamily: "var(--font)",
   fontSize: "var(--text-xs)",
-  fontWeight: 500,
-  color: "var(--text-muted)",
+  fontWeight: 600,
+  color: "var(--text-secondary)",
 };
 
 // The sheet's max-height must fall back gracefully: older engines that don't
@@ -320,9 +320,10 @@ export default function AddTaskModal({
           <div
             style={{
               width: 36,
-              height: 4,
+              height: 5,
               borderRadius: "var(--r-full)",
-              background: "var(--border)",
+              background: "var(--border-strong)",
+              opacity: 0.7,
               margin: "0 auto var(--sp-3)",
             }}
           />
@@ -356,13 +357,13 @@ export default function AddTaskModal({
                 height: 44,
                 flexShrink: 0,
                 borderRadius: "var(--r-full)",
-                background: "var(--bg)",
-                border: "1px solid var(--border)",
+                background: "var(--fill)",
+                border: "none",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
                 cursor: "pointer",
-                color: "var(--text-muted)",
+                color: "var(--text-secondary)",
               }}
             >
               <X size={18} strokeWidth={2} />
@@ -392,7 +393,7 @@ export default function AddTaskModal({
               WebkitOverflowScrolling: "touch",
               display: "flex",
               flexDirection: "column",
-              gap: "var(--sp-3)",
+              gap: "var(--sp-4)",
               padding: "var(--sp-5)",
             }}
           >
@@ -410,7 +411,7 @@ export default function AddTaskModal({
               e.target.style.boxShadow = "0 0 0 3px var(--jmh-blue-30)";
             }}
             onBlur={(e) => {
-              e.target.style.borderColor = "var(--border-strong)";
+              e.target.style.borderColor = "var(--border)";
               e.target.style.boxShadow = "none";
             }}
           />
@@ -439,7 +440,7 @@ export default function AddTaskModal({
                   width: 44,
                   height: 44,
                   borderRadius: "var(--r-full)",
-                  border: "1px solid var(--border-strong)",
+                  border: "1px solid var(--border)",
                   background: "var(--surface)",
                   color: "var(--text-secondary)",
                   cursor: "pointer",
@@ -480,9 +481,10 @@ export default function AddTaskModal({
                 <DateChip
                   key={p.value}
                   label={
-                    <>
-                      {p.label} <TimeText value={p.value} />
-                    </>
+                    <span style={{ display: "inline-flex", alignItems: "baseline", gap: 5 }}>
+                      {p.label}
+                      <TimeText value={p.value} />
+                    </span>
                   }
                   active={dueTime === p.value}
                   disabled={timeDisabled}
@@ -578,7 +580,7 @@ export default function AddTaskModal({
                   minHeight: 44,
                   padding: "0 16px",
                   borderRadius: "var(--r-full)",
-                  border: `1px solid ${urgent ? "var(--jmh-coral)" : "var(--border-strong)"}`,
+                  border: `1px solid ${urgent ? "var(--jmh-coral)" : "var(--border)"}`,
                   background: urgent
                     ? "color-mix(in oklch, var(--jmh-coral) 12%, var(--surface))"
                     : "var(--surface)",
@@ -656,7 +658,7 @@ export default function AddTaskModal({
               e.target.style.boxShadow = "0 0 0 3px var(--jmh-blue-30)";
             }}
             onBlur={(e) => {
-              e.target.style.borderColor = "var(--border-strong)";
+              e.target.style.borderColor = "var(--border)";
               e.target.style.boxShadow = "none";
             }}
           />
@@ -664,16 +666,7 @@ export default function AddTaskModal({
           {/* Child selector (optional) */}
           {childMembers.length > 0 && (
             <div style={{ display: "flex", flexDirection: "column", gap: "var(--sp-2)", flexShrink: 0 }}>
-              <span
-                style={{
-                  fontFamily: "var(--font)",
-                  fontSize: "var(--text-xs)",
-                  fontWeight: 500,
-                  color: "var(--text-muted)",
-                }}
-              >
-                ילד
-              </span>
+              <span style={fieldLabelStyle}>ילד</span>
               <div style={{ display: "flex", gap: "var(--sp-2)", flexWrap: "wrap" }}>
                 <ChildPill label="ללא" active={childId === null} onClick={() => setChildId(null)} />
                 {childMembers.map((c) => (
@@ -691,16 +684,7 @@ export default function AddTaskModal({
 
           {/* Recurrence control */}
           <div style={{ display: "flex", flexDirection: "column", gap: "var(--sp-2)", flexShrink: 0 }}>
-            <span
-              style={{
-                fontFamily: "var(--font)",
-                fontSize: "var(--text-xs)",
-                fontWeight: 500,
-                color: "var(--text-muted)",
-              }}
-            >
-              חזרה
-            </span>
+            <span style={fieldLabelStyle}>חזרה</span>
             <div style={{ display: "flex", gap: "var(--sp-2)", flexWrap: "wrap" }}>
               {RECURRENCE_OPTIONS.map((o) => {
                 const active = recurrence === o.value;
@@ -714,7 +698,7 @@ export default function AddTaskModal({
                       minHeight: 44,
                       padding: "0 16px",
                       borderRadius: "var(--r-full)",
-                      border: `1px solid ${active ? "var(--jmh-blue-30)" : "var(--border-strong)"}`,
+                      border: `1px solid ${active ? "var(--jmh-blue-30)" : "var(--border)"}`,
                       background: active ? "var(--jmh-blue-05)" : "var(--surface)",
                       color: active ? "var(--jmh-blue)" : "var(--text-secondary)",
                       fontFamily: "var(--font)",
@@ -748,7 +732,7 @@ export default function AddTaskModal({
                         maxWidth: 52,
                         height: 44,
                         borderRadius: "var(--r-full)",
-                        border: `1px solid ${active ? "var(--jmh-blue)" : "var(--border-strong)"}`,
+                        border: `1px solid ${active ? "var(--jmh-blue)" : "var(--border)"}`,
                         background: active ? "var(--jmh-blue)" : "var(--surface)",
                         color: active ? "var(--text-on-blue)" : "var(--text-secondary)",
                         fontFamily: "var(--font)",
@@ -837,6 +821,7 @@ export default function AddTaskModal({
                 width: "100%",
                 padding: "14px var(--sp-6)",
                 background: canSubmit ? "var(--jmh-blue)" : "var(--jmh-blue-30)",
+                minHeight: 48,
                 color: "var(--text-on-blue)",
                 borderRadius: "var(--r-full)",
                 border: "none",
@@ -898,7 +883,7 @@ function DateChip({
         padding: "0 16px",
         borderRadius: "var(--r-full)",
         border: `1px solid ${
-          disabled ? "var(--border)" : active ? "var(--jmh-blue-30)" : "var(--border-strong)"
+          disabled ? "var(--border)" : active ? "var(--jmh-blue-30)" : "var(--border)"
         }`,
         background: disabled ? "var(--bg)" : active ? "var(--jmh-blue-05)" : "var(--surface)",
         color: disabled ? "var(--text-muted)" : active ? "var(--jmh-blue)" : "var(--text-secondary)",
@@ -906,7 +891,7 @@ function DateChip({
         fontSize: "var(--text-sm)",
         fontWeight: active && !disabled ? 600 : 400,
         cursor: disabled ? "not-allowed" : "pointer",
-        opacity: disabled ? 0.6 : 1,
+        opacity: disabled ? 0.55 : 1,
         whiteSpace: "nowrap",
         transition: `all var(--dur-fast) var(--ease-out)`,
       }}
@@ -939,7 +924,7 @@ function ChildPill({
         minHeight: 44,
         padding: "0 16px",
         borderRadius: "var(--r-full)",
-        border: `1px solid ${active ? "var(--jmh-blue-30)" : "var(--border-strong)"}`,
+        border: `1px solid ${active ? "var(--jmh-blue-30)" : "var(--border)"}`,
         background: active ? "var(--jmh-blue-05)" : "var(--surface)",
         color: active ? "var(--jmh-blue)" : "var(--text-secondary)",
         fontFamily: "var(--font)",

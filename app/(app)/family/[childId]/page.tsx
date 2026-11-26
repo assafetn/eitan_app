@@ -1,8 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import type { FamilyMember, OccurrenceOverride, Task } from "@/lib/types";
 import { notFound } from "next/navigation";
-import Link from "next/link";
-import { ChevronRight } from "lucide-react";
+import BackLink from "@/components/ui/BackLink";
 import TasksClient from "@/app/(app)/tasks/TasksClient";
 
 export const dynamic = "force-dynamic";
@@ -54,42 +53,15 @@ export default async function ChildTasksPage({
   }
 
   return (
-    <div>
-      {/* Back to family overview */}
-      <div
-        style={{
-          width: "100%",
-          maxWidth: 600,
-          margin: "0 auto",
-          padding: "var(--sp-6) var(--sp-4) 0",
-        }}
-      >
-        <Link
-          href="/family"
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: "var(--sp-1)",
-            fontFamily: "var(--font)",
-            fontSize: "var(--text-sm)",
-            color: "var(--text-muted)",
-            textDecoration: "none",
-          }}
-        >
-          <ChevronRight size={16} strokeWidth={2} />
-          חזרה למשפחה
-        </Link>
-      </div>
-
-      <TasksClient
-        initialTasks={(tasks as Task[]) ?? []}
-        initialOverrides={overrides}
-        members={(members as FamilyMember[]) ?? []}
-        childMembers={(children as FamilyMember[]) ?? []}
-        title={(child as FamilyMember).name}
-        showAddButton={false}
-        openOnly
-      />
-    </div>
+    <TasksClient
+      initialTasks={(tasks as Task[]) ?? []}
+      initialOverrides={overrides}
+      members={(members as FamilyMember[]) ?? []}
+      childMembers={(children as FamilyMember[]) ?? []}
+      title={(child as FamilyMember).name}
+      back={<BackLink href="/family" label="משפחה" />}
+      showAddButton={false}
+      openOnly
+    />
   );
 }

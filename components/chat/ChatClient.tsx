@@ -359,7 +359,7 @@ export default function ChatClient({ myMemberId, adults, initialMessages }: Prop
           flex: 1,
           overflowY: "auto",
           overscrollBehavior: "contain",
-          padding: "var(--sp-3) var(--sp-4)",
+          padding: "var(--sp-2) var(--sp-3) var(--sp-3)",
           display: "flex",
           flexDirection: "column",
           gap: 2,
@@ -378,7 +378,13 @@ export default function ChatClient({ myMemberId, adults, initialMessages }: Prop
             return (
               <div key={m.id}>
                 {newDay && <DaySeparator label={dayLabel(key)} />}
-                <Bubble message={m} mine={mine} sender={sameSender || mine ? null : sender} onRetry={() => retry(m)} />
+                <Bubble
+                  message={m}
+                  mine={mine}
+                  first={!sameSender}
+                  sender={sameSender || mine ? null : sender}
+                  onRetry={() => retry(m)}
+                />
                 {m.role === "assistant" &&
                   Array.isArray(m.meta?.task_ids) &&
                   (m.meta.task_ids as string[]).map((id) => {
@@ -403,7 +409,7 @@ export default function ChatClient({ myMemberId, adults, initialMessages }: Prop
           display: "flex",
           alignItems: "flex-end",
           gap: "var(--sp-2)",
-          padding: "var(--sp-2) var(--sp-4) var(--sp-3)",
+          padding: "var(--sp-2) var(--sp-3) var(--sp-3)",
         }}
       >
         <textarea
@@ -429,10 +435,10 @@ export default function ChatClient({ myMemberId, adults, initialMessages }: Prop
             color: "var(--text-primary)",
             background: "var(--surface)",
             border: "1px solid var(--border)",
-            borderRadius: "var(--r-lg)",
-            padding: "10px 14px",
+            // 44px tall on one line → a full pill, like a messaging app.
+            borderRadius: 22,
+            padding: "10px 16px",
             outline: "none",
-            boxShadow: "var(--shadow-sm)",
             maxHeight: 140,
           }}
         />
@@ -448,10 +454,10 @@ export default function ChatClient({ myMemberId, adults, initialMessages }: Prop
             border: "none",
             display: "grid",
             placeItems: "center",
-            background: canSend ? "var(--jmh-blue)" : "var(--jmh-blue-10)",
+            background: canSend ? "var(--jmh-blue)" : "var(--fill)",
             color: canSend ? "var(--text-on-blue)" : "var(--text-muted)",
             cursor: canSend ? "pointer" : "default",
-            transition: "background var(--dur-fast) var(--ease-out)",
+            transition: "background var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out)",
           }}
         >
           {/* The icon points right; mirror it so it points "forward" in RTL. */}
@@ -466,20 +472,28 @@ export default function ChatClient({ myMemberId, adults, initialMessages }: Prop
 
 // ── pieces ───────────────────────────────────────────────
 
+const BUBBLE_R = 18;
+const TAIL_R = 6;
+
 function Bubble({
   message,
   mine,
+  first,
   sender,
   onRetry,
 }: {
   message: LocalMessage;
   mine: boolean;
+  /** First bubble of a run from the same sender: gets the "tail" corner. */
+  first: boolean;
   sender: string | null;
   onRetry: () => void;
 }) {
   const assistant = message.role === "assistant";
   const failed = message.status === "failed";
 
+  // Mine: the calm blue. Eitan: his own soft periwinkle voice. The other
+  // adult: plain paper with a hairline.
   const background = mine ? "var(--jmh-blue)" : assistant ? "var(--jmh-periwinkle-bg)" : "var(--surface)";
   const color = mine ? "var(--text-on-blue)" : "var(--text-primary)";
 
@@ -490,7 +504,7 @@ function Bubble({
         flexDirection: "column",
         // RTL: flex-start is the right edge (others), flex-end the left (mine).
         alignItems: mine ? "flex-end" : "flex-start",
-        marginTop: sender ? "var(--sp-3)" : 2,
+        marginTop: first ? "var(--sp-3)" : 2,
       }}
     >
       {sender && (
@@ -500,7 +514,7 @@ function Bubble({
             fontSize: "var(--text-xs)",
             fontWeight: 600,
             color: assistant ? "var(--jmh-periwinkle)" : "var(--text-secondary)",
-            margin: "0 var(--sp-2) 2px",
+            margin: "0 var(--sp-3) 3px",
           }}
         >
           {sender}
@@ -512,21 +526,37 @@ function Bubble({
         onClick={failed ? onRetry : undefined}
         onKeyDown={failed ? (e) => (e.key === "Enter" || e.key === " ") && onRetry() : undefined}
         style={{
-          maxWidth: "82%",
+          maxWidth: "80%",
           background,
           color,
-          border: mine ? "none" : "1px solid var(--border)",
-          borderRadius: "var(--r-lg)",
-          padding: "8px 12px 6px",
-          boxShadow: "var(--shadow-sm)",
-          opacity: message.status === "sending" ? 0.7 : 1,
+          border: mine || assistant ? "1px solid transparent" : "1px solid var(--border)",
+          borderRadius: BUBBLE_R,
+          // The corner on the sender's side, at the top of a run. In RTL,
+          // start = right (others), end = left (mine).
+          ...(first
+            ? mine
+              ? { borderStartEndRadius: TAIL_R }
+              : { borderStartStartRadius: TAIL_R }
+            : null),
+          padding: "7px 12px 6px",
+          opacity: message.status === "sending" ? 0.65 : 1,
           outline: failed ? "2px solid var(--jmh-coral)" : "none",
+          outlineOffset: 1,
           cursor: failed ? "pointer" : "default",
+          transition: "opacity var(--dur-base) var(--ease-out)",
+          // Body and time share a wrapping row: a short message keeps its time
+          // on the same line, a long one pushes it under the last line.
+          display: "flex",
+          flexWrap: "wrap",
+          alignItems: "flex-end",
+          columnGap: "var(--sp-2)",
         }}
       >
         <div
           dir="auto"
           style={{
+            flex: "0 1 auto",
+            minWidth: 0,
             fontFamily: "var(--font)",
             fontSize: "var(--text-base)",
             lineHeight: 1.45,
@@ -538,11 +568,14 @@ function Bubble({
         </div>
         <div
           style={{
+            marginInlineStart: "auto",
             fontFamily: "var(--font)",
             fontSize: "var(--text-xs)",
-            marginTop: 2,
-            textAlign: "end",
-            opacity: 0.75,
+            lineHeight: 1.6,
+            fontVariantNumeric: "tabular-nums",
+            color: failed ? "var(--jmh-coral)" : mine ? "var(--text-on-blue)" : "var(--text-muted)",
+            opacity: mine && !failed ? 0.78 : 1,
+            whiteSpace: "nowrap",
           }}
         >
           {failed ? "לא נשלחה · הקישו לנסות שוב" : timeFmt.format(new Date(message.created_at))}
@@ -557,17 +590,22 @@ function TypingHint() {
     <div style={{ display: "flex", justifyContent: "flex-start", marginTop: "var(--sp-3)" }}>
       <span
         role="status"
+        aria-label="איתן כותב…"
         style={{
-          fontFamily: "var(--font)",
-          fontSize: "var(--text-sm)",
+          display: "inline-flex",
+          alignItems: "center",
+          gap: 4,
+          height: 34,
+          padding: "0 14px",
           color: "var(--jmh-periwinkle)",
           background: "var(--jmh-periwinkle-bg)",
-          border: "1px solid var(--border)",
-          borderRadius: "var(--r-lg)",
-          padding: "6px 12px",
+          borderRadius: BUBBLE_R,
+          borderStartStartRadius: TAIL_R,
         }}
       >
-        איתן כותב…
+        <span className="typing-dot" />
+        <span className="typing-dot" />
+        <span className="typing-dot" />
       </span>
     </div>
   );
@@ -575,14 +613,14 @@ function TypingHint() {
 
 function DaySeparator({ label }: { label: string }) {
   return (
-    <div style={{ display: "flex", justifyContent: "center", margin: "var(--sp-4) 0 var(--sp-1)" }}>
+    <div style={{ display: "flex", justifyContent: "center", margin: "var(--sp-5) 0 var(--sp-1)" }}>
       <span
         style={{
           fontFamily: "var(--font)",
           fontSize: "var(--text-xs)",
           fontWeight: 500,
-          color: "var(--text-muted)",
-          background: "var(--jmh-blue-05)",
+          color: "var(--text-secondary)",
+          background: "var(--fill)",
           borderRadius: "var(--r-full)",
           padding: "3px 10px",
         }}
@@ -598,20 +636,45 @@ function EmptyState() {
     <div
       style={{
         margin: "auto",
+        maxWidth: 300,
+        padding: "var(--sp-8) var(--sp-4)",
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        gap: "var(--sp-3)",
         textAlign: "center",
-        padding: "var(--sp-8) var(--sp-6)",
         fontFamily: "var(--font)",
         color: "var(--text-secondary)",
       }}
     >
-      <p style={{ fontSize: "var(--text-md)", fontWeight: 600, color: "var(--text-primary)", margin: "0 0 var(--sp-2)" }}>
+      <p
+        style={{
+          fontFamily: "var(--font-display)",
+          fontSize: "var(--text-xl)",
+          fontWeight: 700,
+          color: "var(--text-primary)",
+          margin: 0,
+        }}
+      >
         הצ׳אט המשפחתי
       </p>
-      <p style={{ fontSize: "var(--text-sm)", margin: 0, lineHeight: 1.5 }}>
-        כתבו לאיתן מה לזכור, והוא יקבע תזכורות לכם.
-        <br />
-        למשל: ״תזכיר לנו מחר ב-16:00 לקחת את איתן לרופא״
+      <p style={{ fontSize: "var(--text-sm)", margin: 0, lineHeight: 1.55 }}>
+        כתבו לאיתן מה לזכור, והוא יקבע לכם תזכורת.
       </p>
+      {/* The example, shown as the message it would be. */}
+      <span
+        style={{
+          marginTop: "var(--sp-2)",
+          fontSize: "var(--text-sm)",
+          lineHeight: 1.45,
+          color: "var(--text-secondary)",
+          border: "1px dashed var(--border-strong)",
+          borderRadius: BUBBLE_R,
+          padding: "8px 14px",
+        }}
+      >
+        ״תזכיר לנו מחר ב-16:00 לקחת את איתן לרופא״
+      </span>
     </div>
   );
 }

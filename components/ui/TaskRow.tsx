@@ -37,24 +37,23 @@ export default function TaskRow({ task, adults, date, status, isRecurring, onTog
 
   return (
     <div
-      className={onEdit ? "task-row task-row--tappable" : "task-row"}
+      // A row inside the section's inset group (globals.css .group-row): the
+      // hairline above it starts at the title (--row-inset), and press/hover
+      // feedback is a quiet fill.
+      className={onEdit ? "group-row group-row--tap" : "group-row"}
       onClick={onEdit}
       style={{
-        background: isHighPriority
-          ? "color-mix(in oklch, var(--jmh-coral) 8%, var(--surface))"
+        // Opaque even when tinted: the swipe's delete action sits underneath.
+        ["--row-bg" as string]: isHighPriority
+          ? "color-mix(in oklch, var(--jmh-coral) 6%, var(--surface))"
           : "var(--surface)",
-        border: "1px solid var(--border)",
-        borderRadius: "var(--r-md)",
-        padding: "12px 14px",
+        ["--row-inset" as string]: "50px",
+        minHeight: 56,
+        padding: "10px 16px",
         display: "flex",
         alignItems: "center",
-        gap: "var(--sp-3)",
-        boxShadow: "var(--shadow-sm)",
-        cursor: onEdit ? "pointer" : "default",
-        opacity: isDone ? 0.6 : 1,
-        // hover lift / press scale live in globals.css (.task-row) so they can be
-        // gated to real hover devices and to :active for touch.
-      }}
+        gap: 12,
+      } as React.CSSProperties}
     >
       {/* Toggle circle. The visible circle stays 20px, but the button pads out to
           a 44×44 touch target and pulls back with a matching negative margin, so
@@ -63,8 +62,8 @@ export default function TaskRow({ task, adults, date, status, isRecurring, onTog
         onClick={(e) => { e.stopPropagation(); onToggle(); }}
         aria-label={isDone ? "סימון כפתוחה" : "סימון כהושלמה"}
         style={{
-          padding: 12, // 12 + 20 circle + 12 = 44px hit area (box-sizing: border-box)
-          margin: -12, // neutralises the padding so the footprint stays 20px
+          padding: 11, // 11 + 22 circle + 11 = 44px hit area (box-sizing: border-box)
+          margin: -11, // neutralises the padding so the footprint stays 22px
           background: "transparent",
           border: "none",
           flexShrink: 0,
@@ -77,10 +76,10 @@ export default function TaskRow({ task, adults, date, status, isRecurring, onTog
         <span
           aria-hidden="true"
           style={{
-            width: 20,
-            height: 20,
+            width: 22,
+            height: 22,
             borderRadius: "50%",
-            border: `2px solid ${isDone ? "var(--jmh-sage)" : isUrgent ? "var(--jmh-coral)" : "var(--border-strong)"}`,
+            border: `1.5px solid ${isDone ? "var(--jmh-sage)" : isUrgent ? "var(--jmh-coral)" : "var(--border-strong)"}`,
             background: isDone ? "var(--jmh-sage)" : "transparent",
             display: "flex",
             alignItems: "center",
@@ -89,12 +88,13 @@ export default function TaskRow({ task, adults, date, status, isRecurring, onTog
             transition: `background var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out)`,
           }}
         >
-          {isDone && <Check size={10} strokeWidth={2.5} />}
+          {isDone && <Check size={13} strokeWidth={2.6} />}
         </span>
       </button>
 
-      {/* Content */}
-      <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 2 }}>
+      {/* Content — dimmed (not the whole row) when done, so the tinted
+          background stays opaque over the swipe action. */}
+      <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 3, opacity: isDone ? 0.7 : 1 }}>
         <div style={{ display: "flex", alignItems: "center", gap: "var(--sp-1)", minWidth: 0 }}>
           {isRecurring && (
             <Repeat
@@ -111,6 +111,7 @@ export default function TaskRow({ task, adults, date, status, isRecurring, onTog
               fontWeight: 500,
               color: isDone ? "var(--text-muted)" : "var(--text-primary)",
               textDecoration: isDone ? "line-through" : "none",
+              textDecorationColor: "var(--border-strong)",
               lineHeight: 1.3,
               whiteSpace: "nowrap",
               overflow: "hidden",

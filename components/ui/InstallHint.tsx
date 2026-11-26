@@ -59,12 +59,12 @@ export default function InstallHint() {
         display: "flex",
         alignItems: "flex-start",
         gap: "var(--sp-3)",
-        background: "var(--surface)",
-        border: "1px solid var(--border)",
-        borderRadius: "var(--r-md)",
-        boxShadow: "var(--shadow-sm)",
+        // A soft tint, not a card: a passing hint, quieter than the settings.
+        background: "var(--jmh-blue-05)",
+        borderRadius: "var(--r-lg)",
         padding: "var(--sp-4)",
-        marginBottom: "var(--sp-6)",
+        paddingInlineEnd: "var(--sp-2)",
+        marginBottom: "var(--sp-8)",
       }}
     >
       <div style={{ flex: 1, minWidth: 0 }}>

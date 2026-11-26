@@ -107,7 +107,7 @@ export default function SwipeToDelete({
   const open = x !== 0;
 
   return (
-    <div ref={wrapRef} style={{ position: "relative", borderRadius: "var(--r-md)", overflow: "hidden" }}>
+    <div ref={wrapRef} style={{ position: "relative", overflow: "hidden" }}>
       {/* The action underneath. Only interactive while revealed. */}
       <div
         aria-hidden={!open}

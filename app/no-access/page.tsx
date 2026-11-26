@@ -15,33 +15,22 @@ export default function NoAccessPage() {
         textAlign: "center",
       }}
     >
-      <div
-        style={{
-          width: 48,
-          height: 48,
-          borderRadius: "var(--r-full)",
-          background: "var(--jmh-coral-bg)",
-          border: "1px solid var(--jmh-coral)",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          marginBottom: "var(--sp-4)",
-        }}
-      >
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--jmh-coral)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <circle cx="12" cy="12" r="10"/>
-          <line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/>
-        </svg>
-      </div>
+      <img
+        src="/apple-touch-icon.png"
+        alt=""
+        width={56}
+        height={56}
+        style={{ borderRadius: 14, boxShadow: "var(--shadow-sm)", marginBottom: "var(--sp-6)", opacity: 0.85 }}
+      />
 
       <h1
         style={{
-          fontFamily: "var(--font)",
-          fontSize: "var(--text-xl)",
+          fontFamily: "var(--font-display)",
+          fontSize: "var(--text-2xl)",
           fontWeight: 700,
-          letterSpacing: "-0.02em",
+          lineHeight: 1.1,
           color: "var(--text-primary)",
-          margin: "0 0 var(--sp-2)",
+          margin: "0 0 var(--sp-3)",
         }}
       >
         אין גישה
@@ -53,10 +42,10 @@ export default function NoAccessPage() {
           color: "var(--text-secondary)",
           maxWidth: 280,
           lineHeight: 1.5,
-          margin: "0 0 var(--sp-6)",
+          margin: "0 0 var(--sp-8)",
         }}
       >
-        חשבון זה אינו מורשה להשתמש ב-{APP_NAME}. אנא פנו לאסף.
+        החשבון הזה אינו מורשה להשתמש ב{APP_NAME}. אנא פנו לאסף.
       </p>
 
       <Link
@@ -64,16 +53,15 @@ export default function NoAccessPage() {
         style={{
           display: "inline-flex",
           alignItems: "center",
-          padding: "10px 20px",
-          background: "var(--surface)",
-          border: "1px solid var(--border-strong)",
-          borderRadius: "var(--r-md)",
+          minHeight: 44,
+          padding: "0 20px",
+          background: "var(--fill)",
+          borderRadius: "var(--r-full)",
           fontFamily: "var(--font)",
           fontSize: "var(--text-sm)",
-          fontWeight: 500,
+          fontWeight: 600,
           color: "var(--text-primary)",
           textDecoration: "none",
-          boxShadow: "var(--shadow-sm)",
         }}
       >
         חזרה להתחברות

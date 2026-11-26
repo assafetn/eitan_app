@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Rubik } from "next/font/google";
+import { Frank_Ruhl_Libre, Rubik } from "next/font/google";
 import "./globals.css";
 import { APP_NAME } from "@/lib/constants";
 import PWARegister from "@/components/PWARegister";
@@ -16,6 +16,14 @@ const rubik = Rubik({
   subsets: ["hebrew", "latin"],
   display: "swap",
   variable: "--font-rubik",
+});
+
+// Display face for the large page titles and the login wordmark only
+// (--font-display): a classical Hebrew book face that gives the app warmth.
+const frank = Frank_Ruhl_Libre({
+  subsets: ["hebrew", "latin"],
+  display: "swap",
+  variable: "--font-frank",
 });
 
 export const metadata: Metadata = {
@@ -42,7 +50,7 @@ export const metadata: Metadata = {
   other: { "mobile-web-app-capable": "yes" },
 };
 
-// theme_color for the browser UI (matches the manifest / --jmh-blue token).
+// theme_color for the browser UI (the blue brand accent).
 // width/initialScale pin the layout viewport to the device so iOS can't render
 // a wide 980px page; viewportFit:cover makes the app fill edge-to-edge under the
 // notch and exposes the safe-area-inset-* envs. Zoom is deliberately NOT locked
@@ -63,7 +71,7 @@ export default function RootLayout({
     // suppressHydrationWarning: the inline script below mutates <html>'s
     // data-theme before React hydrates, so the server markup deliberately
     // doesn't match. It suppresses that one attribute diff, nothing deeper.
-    <html lang="he" dir="rtl" className={rubik.variable} suppressHydrationWarning>
+    <html lang="he" dir="rtl" className={`${rubik.variable} ${frank.variable}`} suppressHydrationWarning>
       <head>
         {/* MUST stay first and blocking — it stamps data-theme before the first
             paint, which is the whole reason dark mode doesn't flash white. */}

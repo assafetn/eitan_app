@@ -9,7 +9,7 @@ import { usePathname } from "next/navigation";
 import { Settings } from "lucide-react";
 
 /** Height of the bar below the top safe area. */
-export const TOP_TABS_HEIGHT = 56;
+export const TOP_TABS_HEIGHT = 52;
 
 const tabs = [
   { id: "chat", href: "/chat", label: "צ׳אט" },
@@ -38,26 +38,15 @@ export default function TopTabs({
         boxSizing: "border-box",
         display: "flex",
         alignItems: "center",
-        gap: "var(--sp-2)",
+        gap: "var(--sp-3)",
         padding: "0 var(--sp-4)",
         background: "var(--bg)",
         borderBottom: "1px solid var(--border)",
       }}
     >
-      <div
-        role="tablist"
-        style={{
-          flex: 1,
-          maxWidth: 360,
-          marginInline: "auto",
-          display: "flex",
-          gap: 4,
-          padding: 4,
-          background: "var(--surface)",
-          border: "1px solid var(--border)",
-          borderRadius: "var(--r-full)",
-        }}
-      >
+      {/* iOS-style segmented control: a quiet track, the current tab is a
+          raised thumb (not a blue fill — blue is kept for actions). */}
+      <div role="tablist" className="seg" style={{ flex: 1, maxWidth: 320, marginInline: "auto" }}>
         {tabs.map((tab) => {
           const active = pathname.startsWith(tab.href);
           return (
@@ -65,24 +54,9 @@ export default function TopTabs({
               key={tab.id}
               href={tab.href}
               role="tab"
+              className="seg-option"
               aria-selected={active}
               aria-current={active ? "page" : undefined}
-              style={{
-                flex: 1,
-                height: 34,
-                display: "inline-flex",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: 6,
-                borderRadius: "var(--r-full)",
-                background: active ? "var(--jmh-blue)" : "transparent",
-                color: active ? "var(--text-on-blue)" : "var(--text-secondary)",
-                fontFamily: "var(--font)",
-                fontSize: "var(--text-sm)",
-                fontWeight: active ? 600 : 500,
-                textDecoration: "none",
-                transition: "background var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out)",
-              }}
             >
               {tab.label}
               {tab.id === "tasks" && tasksBadge}
@@ -97,16 +71,17 @@ export default function TopTabs({
         aria-current={settingsActive ? "page" : undefined}
         style={{
           flexShrink: 0,
-          width: 40,
-          height: 40,
+          width: 44,
+          height: 44,
+          marginInlineEnd: -6, // optical: the glyph, not its hit area, lines up with the edge
           display: "grid",
           placeItems: "center",
           borderRadius: "var(--r-full)",
-          color: settingsActive ? "var(--jmh-blue)" : "var(--text-muted)",
-          background: settingsActive ? "var(--jmh-blue-05)" : "transparent",
+          color: settingsActive ? "var(--jmh-blue)" : "var(--text-secondary)",
+          transition: "color var(--dur-fast) var(--ease-out)",
         }}
       >
-        <Settings size={20} strokeWidth={1.8} />
+        <Settings size={21} strokeWidth={settingsActive ? 2 : 1.7} />
       </Link>
     </nav>
   );

@@ -35,7 +35,8 @@ export default function Toast({ message, onDismiss }: Props) {
       dir="rtl"
       style={{
         position: "fixed",
-        bottom: 96, // clears the fixed bottom nav
+        // Clears the chat composer (and its safe-area inset) at the bottom.
+        bottom: 96,
         insetInlineStart: 0,
         insetInlineEnd: 0,
         display: "flex",
@@ -50,15 +51,15 @@ export default function Toast({ message, onDismiss }: Props) {
       <div
         style={{
           maxWidth: 360,
-          background: "var(--surface)",
-          border: "1px solid var(--border)",
-          borderRadius: "var(--r-md)",
+          // Inverse pill: reads as a passing system note, never as content.
+          background: "var(--text-primary)",
+          borderRadius: "var(--r-full)",
           boxShadow: "var(--shadow-md)",
-          padding: "10px 16px",
+          padding: "10px 18px",
           fontFamily: "var(--font)",
           fontSize: "var(--text-sm)",
           fontWeight: 500,
-          color: "var(--text-primary)",
+          color: "var(--bg)",
           textAlign: "center",
         }}
       >
