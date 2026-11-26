@@ -1,16 +1,24 @@
 import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
-import type { User } from "@supabase/supabase-js";
 
-// Request-scoped cached session user: one `getUser()` per request, shared by the
-// (app) layout's auth gate and the nav-badge counts, so streaming the badges
-// does NOT add a second auth round-trip. React's cache() dedupes per request.
-export const getSessionUser = cache(async (): Promise<User | null> => {
+/** The verified session user: just the fields the app reads. */
+export type SessionUser = { id: string; email: string | null };
+
+// Request-scoped cached session user, shared by the (app) layout's auth gate,
+// the nav-badge counts and the API routes. React's cache() dedupes per request.
+//
+// getClaims() — not getUser(): the project signs access tokens with an
+// asymmetric key (ES256), so the token's signature is checked locally against
+// the published key (fetched once, then cached for 10 minutes). getUser() made
+// a network round-trip to Supabase Auth on EVERY page load. If a token ever
+// can't be verified locally (e.g. a legacy HS256 token), getClaims falls back
+// to that same getUser() call, so this is never less strict than before.
+export const getSessionUser = cache(async (): Promise<SessionUser | null> => {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  return user;
+  const { data, error } = await supabase.auth.getClaims();
+  const claims = data?.claims;
+  if (error || !claims?.sub) return null;
+  return { id: claims.sub, email: typeof claims.email === "string" ? claims.email : null };
 });
 
 /** The family_members row belonging to the session user, or null. */

@@ -77,9 +77,18 @@ export function applyTheme(t: Theme): "light" | "dark" {
 /** Blocking inline <head> script: stamps data-theme BEFORE first paint so the
  *  dark palette is already in place and there's no white flash. Kept dependency
  *  -free and minified because it ships on every response; the try/catch covers
- *  localStorage throwing in private mode. */
-export const THEME_INIT_SCRIPT =
-  `(function(){try{var t=localStorage.getItem("${THEME_STORAGE_KEY}");` +
-  `if(t!=="light"&&t!=="dark")t=window.matchMedia&&window.matchMedia("${DARK_QUERY}").matches?"dark":"light";` +
-  `document.documentElement.setAttribute("data-theme",t)}catch(e){` +
-  `document.documentElement.setAttribute("data-theme","light")}})();`;
+ *  localStorage throwing in private mode.
+ *
+ *  Built with JSON.stringify, NOT template-literal interpolation: the compiler
+ *  constant-folded the old `...getItem("${KEY}");` + `if(...` form and dropped
+ *  the `");`, so the shipped script was a syntax error and never ran (dark-mode
+ *  users saw a light flash on every load). */
+export const THEME_INIT_SCRIPT = [
+  "(function(){try{var t=localStorage.getItem(",
+  JSON.stringify(THEME_STORAGE_KEY),
+  ");if(t!==\"light\"&&t!==\"dark\")t=window.matchMedia&&window.matchMedia(",
+  JSON.stringify(DARK_QUERY),
+  ").matches?\"dark\":\"light\";",
+  "document.documentElement.setAttribute(\"data-theme\",t)}catch(e){",
+  "document.documentElement.setAttribute(\"data-theme\",\"light\")}})();",
+].join("");

@@ -1,6 +1,6 @@
 import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
-import { getSessionUser } from "@/lib/currentUser";
+import { getSessionMember } from "@/lib/currentUser";
 import { todayISO } from "@/lib/recurrence";
 
 // One request-scoped head-only count (`count: 'exact', head: true`) so no row
@@ -16,19 +16,11 @@ import { todayISO } from "@/lib/recurrence";
 export const getNavBadgeCounts = cache(async (): Promise<{ tasks: number }> => {
   const supabase = await createClient();
 
-  // The current adult, resolved the same way the app already does (getMyMemberId):
-  // the family member whose auth_user_id is the session user. `getSessionUser` is
-  // the request-cached user the layout already fetched — no new auth round-trip.
-  const user = await getSessionUser();
-  let myId: string | null = null;
-  if (user) {
-    const { data: me } = await supabase
-      .from("family_members")
-      .select("id")
-      .eq("auth_user_id", user.id)
-      .single();
-    myId = me?.id ?? null;
-  }
+  // The current family member. getSessionMember is request-cached and the
+  // chat/tasks pages fetch it too, so this shares their single lookup instead
+  // of running its own query before the count.
+  const me = await getSessionMember();
+  const myId: string | null = me?.id ?? null;
 
   const today = todayISO();
 

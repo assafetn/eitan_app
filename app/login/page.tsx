@@ -9,11 +9,10 @@ export default async function LoginPage({
   searchParams: Promise<{ error?: string }>;
 }) {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // Local signature check (see lib/currentUser.ts), no Auth round-trip.
+  const { data } = await supabase.auth.getClaims();
 
-  if (user) redirect("/chat");
+  if (data?.claims?.sub) redirect("/chat");
 
   const params = await searchParams;
 

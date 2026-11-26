@@ -14,7 +14,8 @@ export default async function AppLayout({
 }: {
   children: React.ReactNode;
 }) {
-  // Cached per request and reused by the nav-badge counts (no second getUser).
+  // Cached per request and reused by the nav-badge counts and the page.
+  // Verified locally (getClaims), so this costs no network round-trip.
   const user = await getSessionUser();
 
   if (!user) redirect("/login");

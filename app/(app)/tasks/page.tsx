@@ -7,18 +7,21 @@ export const dynamic = "force-dynamic";
 
 export default async function TasksPage() {
   const supabase = await createClient();
-  const me = await getSessionMember();
 
+  // Everything in one parallel batch — the member lookup used to run first and
+  // hold the four queries back by a full database round-trip.
   // Primary rows = singles + recurring series parents (recurrence_parent_id is null).
   // Recurring parents are fetched regardless of status (we never complete the
   // parent itself); done singles are filtered out client-side.
   // Override rows (recurrence_parent_id not null) carry per-occurrence status.
   const [
+    me,
     { data: tasks },
     { data: overrides },
     { data: members },
     { data: children },
   ] = await Promise.all([
+    getSessionMember(),
     supabase
       .from("tasks")
       .select(
