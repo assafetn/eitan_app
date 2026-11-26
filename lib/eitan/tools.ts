@@ -268,6 +268,7 @@ export function makeTools(ctx: EitanContext) {
           due_time: dueTime,
           assignee_id: people.assignee_id,
           is_shared: people.is_shared,
+          owner_pending: people.owner_pending,
           child_id: input.child_id,
           status: "open",
           priority: "normal",
