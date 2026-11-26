@@ -278,7 +278,8 @@ async function handle(request: Request): Promise<NextResponse> {
   }
 
   // 8. PER-TASK PATH — only to the task's owner(s), `lead` minutes early
-  // (30 by default): "להוריד את הזבל ב-08:00" arrives at 07:30.
+  // (30 by default, or the task's own choice): "להוריד את הזבל ב-08:00"
+  // arrives at 07:30.
   for (const occ of occurrences) {
     const dueTime = occ.task.due_time;
     if (!dueTime || !occ.date) continue;
@@ -287,9 +288,14 @@ async function handle(request: Request): Promise<NextResponse> {
 
     const body = `${occ.task.title} ב-${formatHHMM(dueTime)}${occ.task.is_shared ? ` (${BOTH_LABEL})` : ""}`;
 
+    // Per-task choice from the chat buttons (migration 021): no push at all,
+    // or its own lead instead of the owner's default.
+    if (occ.task.push_enabled === false) continue;
+
     for (const member of recipients) {
       if (!isOwner(occ.task, member.id)) continue;
-      if (!timedDue(dueMinutes, member.reminder_lead_minutes ?? DEFAULT_LEAD_MINUTES)) continue;
+      const lead = occ.task.push_lead_minutes ?? member.reminder_lead_minutes ?? DEFAULT_LEAD_MINUTES;
+      if (!timedDue(dueMinutes, lead)) continue;
       planned.push({
         kind: "task",
         dedupeKey: `task:${occ.task.id}:${occ.date}:${member.id}`,
@@ -315,7 +321,9 @@ async function handle(request: Request): Promise<NextResponse> {
   for (const occ of occurrences) {
     if (!occ.task.due_time || !occ.date) continue;
     const dueMinutes = timeToMinutes(occ.task.due_time);
-    if (dueMinutes === null || !timedDue(dueMinutes, chatLead)) continue;
+    // Posted in the chat at the same moment as the task's push (its own lead
+    // when one was chosen), and still posted when its push is turned off.
+    if (dueMinutes === null || !timedDue(dueMinutes, occ.task.push_lead_minutes ?? chatLead)) continue;
     chatPlanned.push(buildChatReminder(occ, adults, todayISO));
   }
 

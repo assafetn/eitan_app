@@ -9,6 +9,7 @@ import { betaTool } from "@anthropic-ai/sdk/helpers/beta/json-schema";
 import type { FamilyMember, OccurrenceOverride, RecurrenceRule, Task, Weekday } from "@/lib/types";
 import { recurrenceLabel, resolveOccurrencesInRange, WEEKDAY_KEYS, type ResolvedOccurrence } from "@/lib/recurrence";
 import { addDays, formatWhen, isISODate, normalizeTime, weekdayIndex } from "./time";
+import { pushLabel } from "@/lib/pushChoice";
 
 export interface EitanContext {
   /** The sender's session client — RLS applies. */
@@ -61,6 +62,7 @@ function describe(occ: ResolvedOccurrence, ctx: EitanContext) {
     for: peopleLabel(t, ctx),
     child: t.child_id ? ctx.children.find((c) => c.id === t.child_id)?.name ?? null : null,
     repeats: t.recurrence_rule ? recurrenceLabel(t.recurrence_rule) : null,
+    push: pushLabel(t),
     status: occ.status,
     notes: t.notes,
   };
@@ -145,6 +147,20 @@ const FOR_WHOM = {
     'Who owns it (every task has an owner, and only the owner gets its reminders): "sender" = the adult who wrote the message ("לי", "תזכיר לי"); "other" = the other adult; "both" = the two adults together ("לנו", "לשנינו", or when it is about the family/kids and nobody was named).',
 } as const;
 
+const PUSH_BEFORE = {
+  type: ["integer", "null"],
+  description:
+    "Phone push for a timed task: minutes before due_time (0 = at the time), -1 = no push at all. Null = the default (30 minutes before, or unchanged on update). Only set it when they said so (\"תזכיר לי רבע שעה לפני\" = 15, \"בלי התראה\" = -1).",
+} as const;
+
+/** -1 = off; 0..1440 = minutes before; null = default / unchanged. */
+function pushPatch(value: number | null): { push_enabled: boolean; push_lead_minutes: number | null } | null | "bad" {
+  if (value === null) return null;
+  if (value === -1) return { push_enabled: false, push_lead_minutes: null };
+  if (!Number.isInteger(value) || value < 0 || value > 1440) return "bad";
+  return { push_enabled: true, push_lead_minutes: value };
+}
+
 const WEEKDAYS = {
   type: ["array", "null"],
   items: { type: "string", enum: ["sun", "mon", "tue", "wed", "thu", "fri", "sat"] },
@@ -197,9 +213,10 @@ export function makeTools(ctx: EitanContext) {
         due_time: { type: ["string", "null"], description: "HH:MM 24h, or null." },
         repeat: { type: "string", enum: ["none", "daily", "weekly"] },
         repeat_days: WEEKDAYS,
+        push_minutes_before: PUSH_BEFORE,
         notes: { type: ["string", "null"] },
       },
-      required: ["title", "for_whom", "child_id", "due_date", "due_time", "repeat", "repeat_days", "notes"],
+      required: ["title", "for_whom", "child_id", "due_date", "due_time", "repeat", "repeat_days", "push_minutes_before", "notes"],
       additionalProperties: false,
     },
     run: async (input) => {
@@ -209,6 +226,8 @@ export function makeTools(ctx: EitanContext) {
       const dueTime = input.due_time === null ? null : normalizeTime(input.due_time);
       if (input.due_time !== null && !dueTime) return fail("due_time must be HH:MM");
       if (input.child_id && !ctx.children.some((c) => c.id === input.child_id)) return fail("unknown child_id");
+      const push = pushPatch(input.push_minutes_before);
+      if (push === "bad") return fail("push_minutes_before must be -1 or 0..1440");
 
       // A repeating task needs a start date; default to today.
       const dueDate = input.due_date ?? (input.repeat !== "none" ? ctx.today : null);
@@ -228,6 +247,7 @@ export function makeTools(ctx: EitanContext) {
           status: "open",
           priority: "normal",
           recurrence_rule: rule,
+          ...(push ?? {}),
           created_by: ctx.sender.id,
         })
         .select(TASK_SELECT)
@@ -260,9 +280,10 @@ export function makeTools(ctx: EitanContext) {
         remove_time: { type: "boolean", description: "true to clear the time (keeps the date)" },
         repeat: { anyOf: [{ type: "string", enum: ["none", "daily", "weekly"] }, { type: "null" }] },
         repeat_days: WEEKDAYS,
+        push_minutes_before: PUSH_BEFORE,
         notes: { type: ["string", "null"] },
       },
-      required: ["task_id", "title", "for_whom", "due_date", "due_time", "remove_time", "repeat", "repeat_days", "notes"],
+      required: ["task_id", "title", "for_whom", "due_date", "due_time", "remove_time", "repeat", "repeat_days", "push_minutes_before", "notes"],
       additionalProperties: false,
     },
     run: async (input) => {
@@ -301,6 +322,9 @@ export function makeTools(ctx: EitanContext) {
         if (rule && !current.due_date && patch.due_date === undefined) patch.due_date = ctx.today;
       }
       if (input.notes !== null) patch.notes = input.notes.trim() || null;
+      const push = pushPatch(input.push_minutes_before);
+      if (push === "bad") return fail("push_minutes_before must be -1 or 0..1440");
+      if (push) Object.assign(patch, push);
 
       const { data, error } = await ctx.supabase.from("tasks").update(patch).eq("id", current.id).select(TASK_SELECT).single();
       if (error || !data) return fail(`save failed: ${error?.message ?? "unknown"}`);

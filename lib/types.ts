@@ -73,6 +73,10 @@ export interface Task {
   priority: TaskPriority;
   recurrence_rule: RecurrenceRule | null;
   recurrence_parent_id: string | null;
+  // Push for this task (migration 021): off, or this many minutes before
+  // due_time. null lead = the owner's reminder_lead_minutes (30).
+  push_enabled: boolean;
+  push_lead_minutes: number | null;
   created_by: string;
   completed_at: string | null;
   created_at: string;

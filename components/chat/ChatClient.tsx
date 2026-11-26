@@ -5,6 +5,7 @@ import { SendHorizontal } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import type { ChatMessage, FamilyMember } from "@/lib/types";
 import Toast from "@/components/ui/Toast";
+import TaskControls, { type CardTask, type TaskPatch } from "./TaskControls";
 
 const SEND_FAILED = "השליחה נכשלה, הקישו על ההודעה כדי לנסות שוב";
 const EITAN_FAILED = "איתן לא הצליח לענות כרגע";
@@ -14,6 +15,11 @@ const TZ = "Asia/Jerusalem";
 // messages then auto-scroll into view instead of yanking someone reading history.
 const STICK_TO_BOTTOM_PX = 120;
 const MAX_LEN = 4000; // mirrors the DB check constraint
+const SAVE_FAILED = "השינוי לא נשמר, נסו שוב";
+const CARD_TASK_SELECT =
+  "id, title, due_date, due_time, assignee_id, is_shared, push_enabled, push_lead_minutes, status, recurrence_rule";
+// Cards are only loaded for the tasks of the most recent replies.
+const MAX_CARD_TASKS = 60;
 
 type SendStatus = "sending" | "failed";
 type LocalMessage = ChatMessage & { status?: SendStatus };
@@ -96,6 +102,67 @@ export default function ChatClient({ myMemberId, adults, initialMessages }: Prop
   lastCreatedRef.current = messages.length ? messages[messages.length - 1].created_at : null;
 
   const nameById = useMemo(() => new Map(adults.map((a) => [a.id, a.name])), [adults]);
+
+  // ── task buttons under Eitan's replies ──
+  // Each task gets one card, under the latest reply that created/changed it.
+  const cardHome = useMemo(() => {
+    const home = new Map<string, string>(); // task id → message id
+    for (const m of messages) {
+      if (m.role !== "assistant" || typeof m.meta?.reply_to !== "string" || !Array.isArray(m.meta.task_ids)) continue;
+      for (const id of m.meta.task_ids as string[]) {
+        home.delete(id); // re-insert so the map stays ordered oldest → newest
+        home.set(id, m.id);
+      }
+    }
+    return home;
+  }, [messages]);
+  const cardIdsKey = useMemo(() => [...cardHome.keys()].slice(-MAX_CARD_TASKS).join(","), [cardHome]);
+  const [cardTasks, setCardTasks] = useState<Map<string, CardTask>>(() => new Map());
+
+  const loadCardTasks = useCallback(async () => {
+    const ids = cardIdsKey ? cardIdsKey.split(",") : [];
+    if (ids.length === 0) return;
+    const { data } = await supabase.from("tasks").select(CARD_TASK_SELECT).in("id", ids);
+    if (!data) return;
+    setCardTasks(new Map((data as CardTask[]).map((t) => [t.id, t])));
+  }, [supabase, cardIdsKey]);
+
+  useEffect(() => {
+    void loadCardTasks();
+  }, [loadCardTasks]);
+
+  // The other adult may have changed a card on their phone.
+  useEffect(() => {
+    const onVisible = () => document.visibilityState === "visible" && void loadCardTasks();
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  }, [loadCardTasks]);
+
+  const patchTask = useCallback(
+    async (id: string, patch: TaskPatch) => {
+      const before = cardTasks.get(id);
+      if (!before) return;
+      setCardTasks((prev) => new Map(prev).set(id, { ...before, ...patch }));
+      const { error } = await supabase
+        .from("tasks")
+        .update({ ...patch, updated_at: new Date().toISOString() })
+        .eq("id", id);
+      if (error) {
+        setCardTasks((prev) => new Map(prev).set(id, before));
+        setToast(SAVE_FAILED);
+      }
+    },
+    [supabase, cardTasks]
+  );
+
+  // The newest reply's cards open with their buttons showing; older ones are
+  // one tappable summary line.
+  const newestCardMessage = useMemo(() => {
+    let newest: string | null = null;
+    for (const [taskId, msgId] of cardHome) if (cardTasks.get(taskId)?.status === "open") newest = msgId;
+    // cardHome is ordered by message, so the last open one is the newest.
+    return newest;
+  }, [cardHome, cardTasks]);
 
   const upsert = useCallback((rows: ChatMessage[]) => {
     setMessages((prev) => mergeMessages(prev, rows));
@@ -309,6 +376,21 @@ export default function ChatClient({ myMemberId, adults, initialMessages }: Prop
               <div key={m.id}>
                 {newDay && <DaySeparator label={dayLabel(key)} />}
                 <Bubble message={m} mine={mine} sender={sameSender || mine ? null : sender} onRetry={() => retry(m)} />
+                {m.role === "assistant" &&
+                  Array.isArray(m.meta?.task_ids) &&
+                  (m.meta.task_ids as string[]).map((id) => {
+                    const t = cardTasks.get(id);
+                    if (!t || t.status !== "open" || cardHome.get(id) !== m.id) return null;
+                    return (
+                      <TaskControls
+                        key={id}
+                        task={t}
+                        adults={adults}
+                        defaultExpanded={m.id === newestCardMessage}
+                        onPatch={patchTask}
+                      />
+                    );
+                  })}
               </div>
             );
           })
