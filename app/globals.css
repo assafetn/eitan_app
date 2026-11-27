@@ -351,6 +351,34 @@ button {
   .btn-tonal:hover { background: var(--jmh-blue-10); }
 }
 
+/* Text: a plain accent label, for a quiet secondary action ("בחירה"). */
+.btn-text {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40px;
+  padding: 0 var(--sp-2);
+  border: none;
+  background: transparent;
+  color: var(--jmh-blue);
+  font-family: var(--font);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+/* Multi-select action bar on the task list: rises in from the bottom. */
+@keyframes select-bar-in {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+.select-bar {
+  animation: select-bar-in var(--dur-base) var(--ease-out);
+}
+@media (prefers-reduced-motion: reduce) {
+  .select-bar { animation: none; }
+}
+
 /* Tap feedback for buttons and links across the app — a quick dip in opacity,
    no size change. Inline styles don't set opacity on active, so this applies. */
 button:not(:disabled),

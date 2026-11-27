@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import type {
   FamilyMember,
@@ -18,7 +18,7 @@ import AddTaskModal from "@/components/ui/AddTaskModal";
 import PullToRefresh from "@/components/ui/PullToRefresh";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import Toast from "@/components/ui/Toast";
-import { Check, Plus } from "lucide-react";
+import { Check, Plus, Trash2 } from "lucide-react";
 
 const SAVE_FAILED = "השמירה נכשלה, נסו שוב";
 const DELETE_FAILED = "המחיקה נכשלה, נסו שוב";
@@ -45,6 +45,10 @@ type OwnerView = "mine" | "all";
 const OWNER_VIEW_KEY = "eitan.tasks.view";
 
 const HORIZON_DAYS = 90;
+
+// Hold a row this long (without moving) to start selecting.
+const LONG_PRESS_MS = 450;
+const LONG_PRESS_SLOP = 8; // px of movement that cancels the hold
 
 // A single rendered row: either a non-recurring task or one expanded
 // occurrence of a recurring series.
@@ -88,6 +92,12 @@ export default function TasksClient({
   const [toast, setToast] = useState<string | null>(null);
   // Coalesced re-fetch so the nav's tasks badge stays in sync after mutations.
   const scheduleRefresh = useCoalescedRefresh();
+  // Multi-select: entered by long-pressing a row or the header's "בחירה".
+  // Keys are occurrence keys; anything no longer on screen simply drops out
+  // (see selectedRows), so a refresh or filter change can't delete hidden rows.
+  const [selecting, setSelecting] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(() => new Set());
+  const [confirmBulk, setConfirmBulk] = useState(false);
 
   const occurrences = useMemo<Occurrence[]>(() => {
     const start = todayISO();
@@ -171,6 +181,50 @@ export default function TasksClient({
     () => groupOccurrences(visible),
     [visible]
   );
+
+  // Every row on screen, in order: what "select all" and the count work on.
+  const rows = useMemo(
+    () => [...overdue, ...today, ...upcoming, ...noDate],
+    [overdue, today, upcoming, noDate]
+  );
+  const selectedRows = useMemo(() => rows.filter((o) => selected.has(o.key)), [rows, selected]);
+  const allSelected = rows.length > 0 && selectedRows.length === rows.length;
+
+  const exitSelecting = useCallback(() => {
+    setSelecting(false);
+    setSelected(new Set());
+    setConfirmBulk(false);
+  }, []);
+
+  function startSelecting(firstKey?: string) {
+    setSelecting(true);
+    setSelected(new Set(firstKey ? [firstKey] : []));
+  }
+
+  function toggleSelected(key: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }
+
+  // Nothing left to select (the list emptied) → leave selection mode.
+  useEffect(() => {
+    if (selecting && rows.length === 0) exitSelecting();
+  }, [selecting, rows.length, exitSelecting]);
+
+  // Escape leaves selection mode (keyboard / desktop). The confirm dialog
+  // handles its own Escape first.
+  useEffect(() => {
+    if (!selecting || confirmBulk) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") exitSelecting();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [selecting, confirmBulk, exitSelecting]);
 
   async function getMyMemberId(supabase: ReturnType<typeof createClient>): Promise<string | null> {
     const uid = (await supabase.auth.getUser()).data.user?.id;
@@ -297,7 +351,7 @@ export default function TasksClient({
   // to the owning row — the recurrence parent id, falling back to the task's own
   // id — and delete THAT. Deleting a parent cascades its override rows (FK).
   async function performDelete(occ: Occurrence) {
-    const targetId = occ.task.recurrence_parent_id ?? occ.task.id;
+    const targetId = deleteTargetId(occ);
     // Snapshot for revert on failure.
     const removedTask = tasks.find((t) => t.id === targetId) ?? null;
     const removedOverrides = overrides.filter((o) => o.recurrence_parent_id === targetId);
@@ -315,6 +369,31 @@ export default function TasksClient({
     } else {
       scheduleRefresh();
     }
+  }
+
+  // Bulk delete: the same rule as a single delete, per row. Each selected row
+  // resolves to its owning row (a recurring occurrence → its whole series,
+  // exactly like swipe-to-delete), de-duplicated, then one DELETE … IN (…).
+  async function performBulkDelete(occs: Occurrence[]) {
+    const ids = [...new Set(occs.map(deleteTargetId))];
+    if (ids.length === 0) return;
+    const idSet = new Set(ids);
+    const removedTasks = tasks.filter((t) => idSet.has(t.id));
+    const removedOverrides = overrides.filter((o) => idSet.has(o.recurrence_parent_id));
+
+    setTasks((prev) => prev.filter((t) => !idSet.has(t.id)));
+    setOverrides((prev) => prev.filter((o) => !idSet.has(o.recurrence_parent_id)));
+
+    const supabase = createClient();
+    const { error } = await supabase.from("tasks").delete().in("id", ids);
+    if (error) {
+      if (removedTasks.length > 0) setTasks((prev) => [...removedTasks, ...prev]);
+      if (removedOverrides.length > 0) setOverrides((prev) => [...prev, ...removedOverrides]);
+      setToast(DELETE_FAILED);
+      return;
+    }
+    setToast(ids.length === 1 ? "המשימה נמחקה" : `${ids.length} משימות נמחקו`);
+    scheduleRefresh();
   }
 
   async function addTask(data: {
@@ -432,20 +511,43 @@ export default function TasksClient({
   }
 
   function renderRow(occ: Occurrence) {
+    // The long-press wrapper stays mounted across both modes, so the click
+    // that ends the hold is swallowed instead of un-selecting the row. In
+    // selection mode there is no swipe: a sideways drag can't delete, and a
+    // tap only selects.
     return (
-      <SwipeToDelete key={occ.key} onDelete={() => setPendingDelete(occ)}>
-      <TaskRow
-        task={occ.task}
-        adults={members}
-        date={occ.date}
-        status={occ.status}
-        isRecurring={occ.isRecurring}
-        onToggle={() => toggleOccurrence(occ)}
-        onEdit={() => setEditingTask(occ.task)}
-      />
-      </SwipeToDelete>
+      <LongPress key={occ.key} disabled={selecting} onLongPress={() => startSelecting(occ.key)}>
+        {selecting ? (
+          <TaskRow
+            task={occ.task}
+            adults={members}
+            date={occ.date}
+            status={occ.status}
+            isRecurring={occ.isRecurring}
+            onToggle={() => {}}
+            selectMode
+            selected={selected.has(occ.key)}
+            onSelect={() => toggleSelected(occ.key)}
+          />
+        ) : (
+          <SwipeToDelete onDelete={() => setPendingDelete(occ)}>
+            <TaskRow
+              task={occ.task}
+              adults={members}
+              date={occ.date}
+              status={occ.status}
+              isRecurring={occ.isRecurring}
+              onToggle={() => toggleOccurrence(occ)}
+              onEdit={() => setEditingTask(occ.task)}
+            />
+          </SwipeToDelete>
+        )}
+      </LongPress>
     );
   }
+
+  const bulkTargetCount = new Set(selectedRows.map(deleteTargetId)).size;
+  const bulkHasRecurring = selectedRows.some(isRecurringOcc);
 
   return (
     <>
@@ -466,11 +568,24 @@ export default function TasksClient({
           >
             <h1 className="page-title">{title}</h1>
 
-            {showAddButton && (
-              <button type="button" className="btn-tonal" onClick={() => setShowAdd(true)}>
-                <Plus size={16} strokeWidth={2.2} />
-                משימה חדשה
+            {selecting ? (
+              <button type="button" className="btn-tonal" onClick={exitSelecting}>
+                ביטול
               </button>
+            ) : (
+              <div style={{ display: "flex", alignItems: "center", gap: "var(--sp-1)" }}>
+                {rows.length > 0 && (
+                  <button type="button" className="btn-text" onClick={() => startSelecting()}>
+                    בחירה
+                  </button>
+                )}
+                {showAddButton && (
+                  <button type="button" className="btn-tonal" onClick={() => setShowAdd(true)}>
+                    <Plus size={16} strokeWidth={2.2} />
+                    משימה חדשה
+                  </button>
+                )}
+              </div>
             )}
           </div>
 
@@ -528,6 +643,8 @@ export default function TasksClient({
             <Section title="ללא תאריך" count={noDate.length}>{noDate.map(renderRow)}</Section>
           )}
 
+          {/* Room for the selection bar, so it never covers the last row. */}
+          {selecting && <div aria-hidden="true" style={{ height: 72 }} />}
         </div>
       </PullToRefresh>
 
@@ -568,8 +685,187 @@ export default function TasksClient({
         />
       )}
 
+      {selecting && (
+        <SelectionBar
+          count={selectedRows.length}
+          allSelected={allSelected}
+          onToggleAll={() =>
+            setSelected(allSelected ? new Set() : new Set(rows.map((o) => o.key)))
+          }
+          onDelete={() => setConfirmBulk(true)}
+        />
+      )}
+
+      {confirmBulk && selectedRows.length > 0 && (
+        <ConfirmDialog
+          title={bulkTargetCount === 1 ? "מחיקת משימה" : `מחיקת ${bulkTargetCount} משימות`}
+          message={
+            bulkTargetCount === 1
+              ? bulkHasRecurring
+                ? "מחיקת המשימה תמחק את כל המופעים החוזרים שלה. להמשיך?"
+                : "המשימה תימחק לצמיתות. להמשיך?"
+              : bulkHasRecurring
+              ? "המשימות יימחקו לצמיתות, כולל כל המופעים של משימות חוזרות. להמשיך?"
+              : "המשימות יימחקו לצמיתות. להמשיך?"
+          }
+          confirmLabel="מחיקה"
+          onConfirm={() => {
+            const occs = selectedRows;
+            exitSelecting();
+            performBulkDelete(occs);
+          }}
+          onCancel={() => setConfirmBulk(false)}
+        />
+      )}
+
       <Toast message={toast} onDismiss={() => setToast(null)} />
     </>
+  );
+}
+
+// Virtual occurrences aren't DB rows: deleting one deletes the row that owns
+// it, the recurrence parent (the whole series), else the task itself.
+function deleteTargetId(occ: Occurrence): string {
+  return occ.task.recurrence_parent_id ?? occ.task.id;
+}
+
+// Long-press (hold still for LONG_PRESS_MS) on a row. Movement past the slop
+// (a scroll, a swipe-to-delete, a pull-to-refresh) cancels the hold, so the
+// gestures never compete. The click that ends a successful hold is swallowed.
+function LongPress({
+  disabled,
+  onLongPress,
+  children,
+}: {
+  disabled: boolean;
+  onLongPress: () => void;
+  children: React.ReactNode;
+}) {
+  const timer = useRef<number | null>(null);
+  const start = useRef<{ x: number; y: number } | null>(null);
+  const fired = useRef(false);
+
+  const clear = () => {
+    if (timer.current !== null) window.clearTimeout(timer.current);
+    timer.current = null;
+    start.current = null;
+  };
+  useEffect(() => clear, []);
+
+  return (
+    <div
+      onPointerDown={(e) => {
+        fired.current = false;
+        clear();
+        if (disabled || (e.pointerType === "mouse" && e.button !== 0)) return;
+        start.current = { x: e.clientX, y: e.clientY };
+        timer.current = window.setTimeout(() => {
+          timer.current = null;
+          start.current = null;
+          fired.current = true;
+          navigator.vibrate?.(10);
+          onLongPress();
+        }, LONG_PRESS_MS);
+      }}
+      onPointerMove={(e) => {
+        const s = start.current;
+        if (s && Math.hypot(e.clientX - s.x, e.clientY - s.y) > LONG_PRESS_SLOP) clear();
+      }}
+      onPointerUp={clear}
+      onPointerCancel={clear}
+      // No text-selection callout or context menu on a held row.
+      onContextMenu={(e) => e.preventDefault()}
+      onClickCapture={(e) => {
+        if (!fired.current) return;
+        fired.current = false;
+        e.stopPropagation();
+        e.preventDefault();
+      }}
+      style={{ WebkitTouchCallout: "none", WebkitUserSelect: "none", userSelect: "none" }}
+    >
+      {children}
+    </div>
+  );
+}
+
+// The bar that floats at the bottom while selecting: the count, select all,
+// and the one destructive action.
+function SelectionBar({
+  count,
+  allSelected,
+  onToggleAll,
+  onDelete,
+}: {
+  count: number;
+  allSelected: boolean;
+  onToggleAll: () => void;
+  onDelete: () => void;
+}) {
+  const label = count === 0 ? "לא נבחרו משימות" : count === 1 ? "משימה אחת נבחרה" : `${count} נבחרו`;
+  return (
+    <div
+      className="select-bar"
+      role="toolbar"
+      aria-label="פעולות על המשימות שנבחרו"
+      style={{
+        position: "fixed",
+        insetInline: 0,
+        bottom: 0,
+        zIndex: 50,
+        background: "var(--surface)",
+        borderTop: "1px solid var(--border)",
+        boxShadow: "var(--shadow-md)",
+        padding: "var(--sp-3) var(--sp-4) calc(var(--sp-3) + env(safe-area-inset-bottom))",
+      }}
+    >
+      <div
+        style={{
+          maxWidth: 600,
+          margin: "0 auto",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: "var(--sp-3)",
+        }}
+      >
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", minWidth: 0 }}>
+          <span
+            aria-live="polite"
+            style={{ fontFamily: "var(--font)", fontSize: "var(--text-sm)", fontWeight: 600, color: "var(--text-primary)" }}
+          >
+            {label}
+          </span>
+          <button type="button" className="btn-text" style={{ minHeight: 32, padding: 0 }} onClick={onToggleAll}>
+            {allSelected ? "ניקוי הבחירה" : "בחירת הכל"}
+          </button>
+        </div>
+        <button
+          type="button"
+          disabled={count === 0}
+          onClick={onDelete}
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: "var(--sp-1)",
+            minHeight: 44,
+            padding: "0 var(--sp-5)",
+            border: "none",
+            borderRadius: "var(--r-full)",
+            background: count === 0 ? "var(--fill)" : "var(--jmh-coral)",
+            color: count === 0 ? "var(--text-muted)" : "var(--text-on-blue)",
+            fontFamily: "var(--font)",
+            fontSize: "var(--text-base)",
+            fontWeight: 600,
+            cursor: count === 0 ? "default" : "pointer",
+            flexShrink: 0,
+            transition: "background-color var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out)",
+          }}
+        >
+          <Trash2 size={17} strokeWidth={2} />
+          {count === 0 ? "מחיקה" : `מחיקה (${count})`}
+        </button>
+      </div>
+    </div>
   );
 }
 
