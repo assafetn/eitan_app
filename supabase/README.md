@@ -2,7 +2,7 @@
 
 ## 1. Create the project
 
-Go to [supabase.com](https://supabase.com) → New project. Choose a region close to Israel (e.g. eu-west-1). Save the **Project URL** and **anon key** — you'll need them for `.env.local`.
+Go to [supabase.com](https://supabase.com) → New project. Choose eu-central-1 (Frankfurt) — the region the live project runs in, next to the Vercel functions (fra1). Save the **Project URL** and **anon key** — you'll need them for `.env.local`.
 
 ## 2. Copy env vars
 
