@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import type {
   FamilyMember,
@@ -18,7 +18,7 @@ import AddTaskModal from "@/components/ui/AddTaskModal";
 import PullToRefresh from "@/components/ui/PullToRefresh";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import Toast from "@/components/ui/Toast";
-import { Check, Plus, Trash2 } from "lucide-react";
+import { Check, Plus, Trash2, X } from "lucide-react";
 
 const SAVE_FAILED = "השמירה נכשלה, נסו שוב";
 const DELETE_FAILED = "המחיקה נכשלה, נסו שוב";
@@ -45,10 +45,6 @@ type OwnerView = "mine" | "all";
 const OWNER_VIEW_KEY = "eitan.tasks.view";
 
 const HORIZON_DAYS = 90;
-
-// Hold a row this long (without moving) to start selecting.
-const LONG_PRESS_MS = 450;
-const LONG_PRESS_SLOP = 8; // px of movement that cancels the hold
 
 // A single rendered row: either a non-recurring task or one expanded
 // occurrence of a recurring series.
@@ -92,11 +88,10 @@ export default function TasksClient({
   const [toast, setToast] = useState<string | null>(null);
   // Coalesced re-fetch so the nav's tasks badge stays in sync after mutations.
   const scheduleRefresh = useCoalescedRefresh();
-  // Multi-select: entered by long-pressing a row or the header's "בחירה".
-  // Keys are occurrence keys; anything no longer on screen simply drops out
-  // (see selectedRows), so a refresh or filter change can't delete hidden rows.
-  const [selecting, setSelecting] = useState(false);
-  const [selected, setSelected] = useState<Set<string>>(() => new Set());
+  // Bulk erase uses the rows' own tick circles: ticking a task brings up a bar
+  // that erases every ticked row on screen at once. The bar's × hides it
+  // until the next tick.
+  const [bulkBarOpen, setBulkBarOpen] = useState(false);
   const [confirmBulk, setConfirmBulk] = useState(false);
 
   const occurrences = useMemo<Occurrence[]>(() => {
@@ -182,49 +177,14 @@ export default function TasksClient({
     [visible]
   );
 
-  // Every row on screen, in order: what "select all" and the count work on.
+  // Every row on screen, in order.
   const rows = useMemo(
     () => [...overdue, ...today, ...upcoming, ...noDate],
     [overdue, today, upcoming, noDate]
   );
-  const selectedRows = useMemo(() => rows.filter((o) => selected.has(o.key)), [rows, selected]);
-  const allSelected = rows.length > 0 && selectedRows.length === rows.length;
-
-  const exitSelecting = useCallback(() => {
-    setSelecting(false);
-    setSelected(new Set());
-    setConfirmBulk(false);
-  }, []);
-
-  function startSelecting(firstKey?: string) {
-    setSelecting(true);
-    setSelected(new Set(firstKey ? [firstKey] : []));
-  }
-
-  function toggleSelected(key: string) {
-    setSelected((prev) => {
-      const next = new Set(prev);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
-      return next;
-    });
-  }
-
-  // Nothing left to select (the list emptied) → leave selection mode.
-  useEffect(() => {
-    if (selecting && rows.length === 0) exitSelecting();
-  }, [selecting, rows.length, exitSelecting]);
-
-  // Escape leaves selection mode (keyboard / desktop). The confirm dialog
-  // handles its own Escape first.
-  useEffect(() => {
-    if (!selecting || confirmBulk) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") exitSelecting();
-    };
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [selecting, confirmBulk, exitSelecting]);
+  // The ticked rows on screen: the same circles that mark a task done.
+  const checkedRows = useMemo(() => rows.filter((o) => o.status === "done"), [rows]);
+  const showBulkBar = bulkBarOpen && checkedRows.length > 0;
 
   async function getMyMemberId(supabase: ReturnType<typeof createClient>): Promise<string | null> {
     const uid = (await supabase.auth.getUser()).data.user?.id;
@@ -234,6 +194,8 @@ export default function TasksClient({
   }
 
   async function toggleOccurrence(occ: Occurrence) {
+    // Ticking a task offers to erase the ticked ones together.
+    if (occ.status === "open") setBulkBarOpen(true);
     const supabase = createClient();
 
     if (!occ.isRecurring) {
@@ -511,43 +473,27 @@ export default function TasksClient({
   }
 
   function renderRow(occ: Occurrence) {
-    // The long-press wrapper stays mounted across both modes, so the click
-    // that ends the hold is swallowed instead of un-selecting the row. In
-    // selection mode there is no swipe: a sideways drag can't delete, and a
-    // tap only selects.
     return (
-      <LongPress key={occ.key} disabled={selecting} onLongPress={() => startSelecting(occ.key)}>
-        {selecting ? (
-          <TaskRow
-            task={occ.task}
-            adults={members}
-            date={occ.date}
-            status={occ.status}
-            isRecurring={occ.isRecurring}
-            onToggle={() => {}}
-            selectMode
-            selected={selected.has(occ.key)}
-            onSelect={() => toggleSelected(occ.key)}
-          />
-        ) : (
-          <SwipeToDelete onDelete={() => setPendingDelete(occ)}>
-            <TaskRow
-              task={occ.task}
-              adults={members}
-              date={occ.date}
-              status={occ.status}
-              isRecurring={occ.isRecurring}
-              onToggle={() => toggleOccurrence(occ)}
-              onEdit={() => setEditingTask(occ.task)}
-            />
-          </SwipeToDelete>
-        )}
-      </LongPress>
+      <SwipeToDelete key={occ.key} onDelete={() => setPendingDelete(occ)}>
+      <TaskRow
+        task={occ.task}
+        adults={members}
+        date={occ.date}
+        status={occ.status}
+        isRecurring={occ.isRecurring}
+        onToggle={() => toggleOccurrence(occ)}
+        onEdit={() => setEditingTask(occ.task)}
+      />
+      </SwipeToDelete>
     );
   }
 
-  const bulkTargetCount = new Set(selectedRows.map(deleteTargetId)).size;
-  const bulkHasRecurring = selectedRows.some(isRecurringOcc);
+  const bulkTargetCount = new Set(checkedRows.map(deleteTargetId)).size;
+  // Erasing a ticked occurrence of a recurring task erases the whole series
+  // (as swipe-to-delete does), so the confirm names those series.
+  const bulkRecurringTitles = [
+    ...new Set(checkedRows.filter(isRecurringOcc).map((o) => `"${o.task.title}"`)),
+  ];
 
   return (
     <>
@@ -568,24 +514,11 @@ export default function TasksClient({
           >
             <h1 className="page-title">{title}</h1>
 
-            {selecting ? (
-              <button type="button" className="btn-tonal" onClick={exitSelecting}>
-                ביטול
+            {showAddButton && (
+              <button type="button" className="btn-tonal" onClick={() => setShowAdd(true)}>
+                <Plus size={16} strokeWidth={2.2} />
+                משימה חדשה
               </button>
-            ) : (
-              <div style={{ display: "flex", alignItems: "center", gap: "var(--sp-1)" }}>
-                {rows.length > 0 && (
-                  <button type="button" className="btn-text" onClick={() => startSelecting()}>
-                    בחירה
-                  </button>
-                )}
-                {showAddButton && (
-                  <button type="button" className="btn-tonal" onClick={() => setShowAdd(true)}>
-                    <Plus size={16} strokeWidth={2.2} />
-                    משימה חדשה
-                  </button>
-                )}
-              </div>
             )}
           </div>
 
@@ -643,8 +576,8 @@ export default function TasksClient({
             <Section title="ללא תאריך" count={noDate.length}>{noDate.map(renderRow)}</Section>
           )}
 
-          {/* Room for the selection bar, so it never covers the last row. */}
-          {selecting && <div aria-hidden="true" style={{ height: 72 }} />}
+          {/* Room for the erase bar, so it never covers the last row. */}
+          {showBulkBar && <div aria-hidden="true" style={{ height: 72 }} />}
         </div>
       </PullToRefresh>
 
@@ -685,40 +618,41 @@ export default function TasksClient({
         />
       )}
 
-      {selecting && (
-        <SelectionBar
-          count={selectedRows.length}
-          allSelected={allSelected}
-          onToggleAll={() =>
-            setSelected(allSelected ? new Set() : new Set(rows.map((o) => o.key)))
-          }
-          onDelete={() => setConfirmBulk(true)}
+      {showBulkBar && (
+        <BulkEraseBar
+          count={checkedRows.length}
+          onClose={() => setBulkBarOpen(false)}
+          onErase={() => setConfirmBulk(true)}
         />
       )}
 
-      {confirmBulk && selectedRows.length > 0 && (
+      {confirmBulk && checkedRows.length > 0 && (
         <ConfirmDialog
           title={bulkTargetCount === 1 ? "מחיקת משימה" : `מחיקת ${bulkTargetCount} משימות`}
           message={
-            bulkTargetCount === 1
-              ? bulkHasRecurring
-                ? "מחיקת המשימה תמחק את כל המופעים החוזרים שלה. להמשיך?"
-                : "המשימה תימחק לצמיתות. להמשיך?"
-              : bulkHasRecurring
-              ? "המשימות יימחקו לצמיתות, כולל כל המופעים של משימות חוזרות. להמשיך?"
-              : "המשימות יימחקו לצמיתות. להמשיך?"
+            (bulkTargetCount === 1
+              ? "המשימה המסומנת תימחק לצמיתות."
+              : `${bulkTargetCount} המשימות המסומנות יימחקו לצמיתות.`) +
+            (bulkRecurringTitles.length === 0
+              ? ""
+              : bulkRecurringTitles.length === 1
+              ? ` ${bulkRecurringTitles[0]} היא משימה חוזרת, וכל המופעים שלה יימחקו.`
+              : ` ${bulkRecurringTitles.join(", ")} הן משימות חוזרות, וכל המופעים שלהן יימחקו.`) +
+            " להמשיך?"
           }
           confirmLabel="מחיקה"
           onConfirm={() => {
-            const occs = selectedRows;
-            exitSelecting();
+            const occs = checkedRows;
+            setConfirmBulk(false);
+            setBulkBarOpen(false);
             performBulkDelete(occs);
           }}
           onCancel={() => setConfirmBulk(false)}
         />
       )}
 
-      <Toast message={toast} onDismiss={() => setToast(null)} />
+      {/* Lifted above the erase bar while it shows. */}
+      <Toast message={toast} onDismiss={() => setToast(null)} lifted={showBulkBar} />
     </>
   );
 }
@@ -729,84 +663,23 @@ function deleteTargetId(occ: Occurrence): string {
   return occ.task.recurrence_parent_id ?? occ.task.id;
 }
 
-// Long-press (hold still for LONG_PRESS_MS) on a row. Movement past the slop
-// (a scroll, a swipe-to-delete, a pull-to-refresh) cancels the hold, so the
-// gestures never compete. The click that ends a successful hold is swallowed.
-function LongPress({
-  disabled,
-  onLongPress,
-  children,
-}: {
-  disabled: boolean;
-  onLongPress: () => void;
-  children: React.ReactNode;
-}) {
-  const timer = useRef<number | null>(null);
-  const start = useRef<{ x: number; y: number } | null>(null);
-  const fired = useRef(false);
-
-  const clear = () => {
-    if (timer.current !== null) window.clearTimeout(timer.current);
-    timer.current = null;
-    start.current = null;
-  };
-  useEffect(() => clear, []);
-
-  return (
-    <div
-      onPointerDown={(e) => {
-        fired.current = false;
-        clear();
-        if (disabled || (e.pointerType === "mouse" && e.button !== 0)) return;
-        start.current = { x: e.clientX, y: e.clientY };
-        timer.current = window.setTimeout(() => {
-          timer.current = null;
-          start.current = null;
-          fired.current = true;
-          navigator.vibrate?.(10);
-          onLongPress();
-        }, LONG_PRESS_MS);
-      }}
-      onPointerMove={(e) => {
-        const s = start.current;
-        if (s && Math.hypot(e.clientX - s.x, e.clientY - s.y) > LONG_PRESS_SLOP) clear();
-      }}
-      onPointerUp={clear}
-      onPointerCancel={clear}
-      // No text-selection callout or context menu on a held row.
-      onContextMenu={(e) => e.preventDefault()}
-      onClickCapture={(e) => {
-        if (!fired.current) return;
-        fired.current = false;
-        e.stopPropagation();
-        e.preventDefault();
-      }}
-      style={{ WebkitTouchCallout: "none", WebkitUserSelect: "none", userSelect: "none" }}
-    >
-      {children}
-    </div>
-  );
-}
-
-// The bar that floats at the bottom while selecting: the count, select all,
-// and the one destructive action.
-function SelectionBar({
+// Rises from the bottom once a task is ticked: how many are ticked, a close
+// (×), and one action that erases all of them.
+function BulkEraseBar({
   count,
-  allSelected,
-  onToggleAll,
-  onDelete,
+  onClose,
+  onErase,
 }: {
   count: number;
-  allSelected: boolean;
-  onToggleAll: () => void;
-  onDelete: () => void;
+  onClose: () => void;
+  onErase: () => void;
 }) {
-  const label = count === 0 ? "לא נבחרו משימות" : count === 1 ? "משימה אחת נבחרה" : `${count} נבחרו`;
+  const label = count === 1 ? "משימה אחת מסומנת" : `${count} משימות מסומנות`;
   return (
     <div
       className="select-bar"
       role="toolbar"
-      aria-label="פעולות על המשימות שנבחרו"
+      aria-label="מחיקת המשימות המסומנות"
       style={{
         position: "fixed",
         insetInline: 0,
@@ -815,7 +688,7 @@ function SelectionBar({
         background: "var(--surface)",
         borderTop: "1px solid var(--border)",
         boxShadow: "var(--shadow-md)",
-        padding: "var(--sp-3) var(--sp-4) calc(var(--sp-3) + env(safe-area-inset-bottom))",
+        padding: "var(--sp-2) var(--sp-3) calc(var(--sp-2) + env(safe-area-inset-bottom))",
       }}
     >
       <div
@@ -824,25 +697,47 @@ function SelectionBar({
           margin: "0 auto",
           display: "flex",
           alignItems: "center",
-          justifyContent: "space-between",
-          gap: "var(--sp-3)",
+          gap: "var(--sp-2)",
         }}
       >
-        <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", minWidth: 0 }}>
-          <span
-            aria-live="polite"
-            style={{ fontFamily: "var(--font)", fontSize: "var(--text-sm)", fontWeight: 600, color: "var(--text-primary)" }}
-          >
-            {label}
-          </span>
-          <button type="button" className="btn-text" style={{ minHeight: 32, padding: 0 }} onClick={onToggleAll}>
-            {allSelected ? "ניקוי הבחירה" : "בחירת הכל"}
-          </button>
-        </div>
         <button
           type="button"
-          disabled={count === 0}
-          onClick={onDelete}
+          aria-label="סגירה"
+          onClick={onClose}
+          style={{
+            width: 44,
+            height: 44,
+            flexShrink: 0,
+            display: "grid",
+            placeItems: "center",
+            border: "none",
+            borderRadius: "50%",
+            background: "transparent",
+            color: "var(--text-secondary)",
+            cursor: "pointer",
+          }}
+        >
+          <X size={20} strokeWidth={2} />
+        </button>
+        <span
+          aria-live="polite"
+          style={{
+            flex: 1,
+            minWidth: 0,
+            fontFamily: "var(--font)",
+            fontSize: "var(--text-sm)",
+            fontWeight: 600,
+            color: "var(--text-primary)",
+            whiteSpace: "nowrap",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+          }}
+        >
+          {label}
+        </span>
+        <button
+          type="button"
+          onClick={onErase}
           style={{
             display: "inline-flex",
             alignItems: "center",
@@ -851,18 +746,17 @@ function SelectionBar({
             padding: "0 var(--sp-5)",
             border: "none",
             borderRadius: "var(--r-full)",
-            background: count === 0 ? "var(--fill)" : "var(--jmh-coral)",
-            color: count === 0 ? "var(--text-muted)" : "var(--text-on-blue)",
+            background: "var(--jmh-coral)",
+            color: "var(--text-on-blue)",
             fontFamily: "var(--font)",
             fontSize: "var(--text-base)",
             fontWeight: 600,
-            cursor: count === 0 ? "default" : "pointer",
+            cursor: "pointer",
             flexShrink: 0,
-            transition: "background-color var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out)",
           }}
         >
           <Trash2 size={17} strokeWidth={2} />
-          {count === 0 ? "מחיקה" : `מחיקה (${count})`}
+          {`מחיקה (${count})`}
         </button>
       </div>
     </div>

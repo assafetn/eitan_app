@@ -7,6 +7,8 @@ interface Props {
   message: string | null;
   /** Called after the auto-dismiss delay (or lets the parent clear it). */
   onDismiss: () => void;
+  /** Sit higher, clear of a bar fixed at the bottom (the tasks erase bar). */
+  lifted?: boolean;
 }
 
 // Auto-dismiss delay for the failure toast.
@@ -15,7 +17,7 @@ const TOAST_MS = 3000;
 // Minimal transient toast, fixed just above the bottom nav. Used to surface a
 // failed optimistic update ("save failed, try again"). Tokens only — no colors
 // or emoji of its own.
-export default function Toast({ message, onDismiss }: Props) {
+export default function Toast({ message, onDismiss, lifted = false }: Props) {
   // Keep the latest onDismiss without re-arming the timer on every parent render.
   const onDismissRef = useRef(onDismiss);
   onDismissRef.current = onDismiss;
@@ -36,7 +38,7 @@ export default function Toast({ message, onDismiss }: Props) {
       style={{
         position: "fixed",
         // Clears the chat composer (and its safe-area inset) at the bottom.
-        bottom: 96,
+        bottom: lifted ? "calc(84px + env(safe-area-inset-bottom))" : 96,
         insetInlineStart: 0,
         insetInlineEnd: 0,
         display: "flex",

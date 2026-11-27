@@ -19,25 +19,9 @@ interface Props {
   onToggle: () => void;
   /** Tapping the row body (not the toggle/delete targets) opens edit. */
   onEdit?: () => void;
-  /** Multi-select mode: the whole row toggles selection, and a checkbox
-   *  replaces the completion circle (so a tap can't complete by accident). */
-  selectMode?: boolean;
-  selected?: boolean;
-  onSelect?: () => void;
 }
 
-export default function TaskRow({
-  task,
-  adults,
-  date,
-  status,
-  isRecurring,
-  onToggle,
-  onEdit,
-  selectMode = false,
-  selected = false,
-  onSelect,
-}: Props) {
+export default function TaskRow({ task, adults, date, status, isRecurring, onToggle, onEdit }: Props) {
   const isDone = status === "done";
   const isUrgent = date ? date < todayISO() : false;
   // High-priority ("דחוף") signalling: a coral background tint + an explicit
@@ -57,26 +41,11 @@ export default function TaskRow({
       // A row inside the section's inset group (globals.css .group-row): the
       // hairline above it starts at the title (--row-inset), and press/hover
       // feedback is a quiet fill.
-      className={onEdit || selectMode ? "group-row group-row--tap" : "group-row"}
-      onClick={selectMode ? onSelect : onEdit}
-      {...(selectMode
-        ? {
-            role: "checkbox",
-            "aria-checked": selected,
-            tabIndex: 0,
-            onKeyDown: (e: React.KeyboardEvent) => {
-              if (e.key === " " || e.key === "Enter") {
-                e.preventDefault();
-                onSelect?.();
-              }
-            },
-          }
-        : {})}
+      className={onEdit ? "group-row group-row--tap" : "group-row"}
+      onClick={onEdit}
       style={{
         // Opaque even when tinted: the swipe's delete action sits underneath.
-        ["--row-bg" as string]: selectMode && selected
-          ? "var(--jmh-blue-05)"
-          : isHighPriority
+        ["--row-bg" as string]: isHighPriority
           ? "color-mix(in oklch, var(--jmh-coral) 6%, var(--surface))"
           : "var(--surface)",
         ["--row-inset" as string]: "50px",
@@ -87,32 +56,9 @@ export default function TaskRow({
         gap: 12,
       } as React.CSSProperties}
     >
-      {selectMode ? (
-        // Selection checkbox: a rounded square (not the round completion
-        // circle) in the same 22px footprint, so rows don't shift. The row
-        // itself is the 56px-tall target.
-        <span
-          aria-hidden="true"
-          style={{
-            width: 22,
-            height: 22,
-            flexShrink: 0,
-            borderRadius: "var(--r-sm)",
-            border: `1.5px solid ${selected ? "var(--jmh-blue)" : "var(--border-strong)"}`,
-            background: selected ? "var(--jmh-blue)" : "transparent",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            color: "var(--text-on-blue)",
-            transition: `background var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out)`,
-          }}
-        >
-          {selected && <Check size={14} strokeWidth={2.8} />}
-        </span>
-      ) : (
-      // Toggle circle. The visible circle stays 20px, but the button pads out to
-      // a 44×44 touch target and pulls back with a matching negative margin, so
-      // the row layout and its neighbours don't shift at 390px RTL.
+      {/* Toggle circle. The visible circle stays 20px, but the button pads out to
+          a 44×44 touch target and pulls back with a matching negative margin, so
+          the row layout and its neighbours don't shift at 390px RTL. */}
       <button
         onClick={(e) => { e.stopPropagation(); onToggle(); }}
         aria-label={isDone ? "סימון כפתוחה" : "סימון כהושלמה"}
@@ -146,7 +92,6 @@ export default function TaskRow({
           {isDone && <Check size={13} strokeWidth={2.6} />}
         </span>
       </button>
-      )}
 
       {/* Content — dimmed (not the whole row) when done, so the tinted
           background stays opaque over the swipe action. */}
