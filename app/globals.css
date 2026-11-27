@@ -126,9 +126,10 @@
      --font-rubik is set on <html> by next/font in app/layout.tsx (self-hosted,
      no render-blocking stylesheet). */
   --font:            var(--font-rubik), system-ui, -apple-system, sans-serif;
-  /* Large page titles and the login wordmark only: a classical Hebrew book
-     face for warmth. Everything else is Rubik. */
-  --font-display:    var(--font-frank), var(--font-rubik), serif;
+  /* Large page titles, the login wordmark and the empty-chat greeting.
+     Same face as the rest of the app (one typeface everywhere); kept as its
+     own token so those spots can still be styled together. */
+  --font-display:    var(--font);
   --font-mono:       ui-monospace, 'Courier New', monospace;
 
   /* TYPE SCALE */
